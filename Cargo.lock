@@ -10277,6 +10277,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-task-rewards"
+version = "0.1.0"
+dependencies = [
+ "parity-scale-codec",
+ "polkadot-sdk",
+ "polkadot-sdk-frame",
+ "scale-info",
+]
+
+[[package]]
 name = "pallet-timestamp"
 version = "44.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10616,6 +10626,7 @@ dependencies = [
  "log",
  "pallet-counter",
  "pallet-parachain-template",
+ "pallet-task-rewards",
  "parity-scale-codec",
  "polkadot-sdk",
  "scale-info",

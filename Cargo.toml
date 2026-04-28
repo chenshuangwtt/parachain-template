@@ -7,7 +7,7 @@ edition = "2021"
 
 [workspace]
 default-members = ["pallets/template", "runtime"]
-members = ["node", "pallets/template", "runtime","pallets/counter"]
+members = ["node", "pallets/template", "runtime","pallets/counter","pallets/task-rewards",]
 resolver = "2"
 
 

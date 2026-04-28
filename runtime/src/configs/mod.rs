@@ -180,6 +180,8 @@ impl pallet_balances::Config for Runtime {
 parameter_types! {
 	/// Relay Chain `TransactionByteFee` / 10
 	pub const TransactionByteFee: Balance = 10 * MICRO_UNIT;
+
+	pub const TaskDeposit: Balance = UNIT;
 }
 
 impl pallet_transaction_payment::Config for Runtime {
@@ -204,6 +206,12 @@ impl pallet_counter::Config for Runtime {
 	type Currency = Balances;
     type CounterDeposit = CounterDeposit;
 	type WeightInfo = pallet_counter::weights::SubstrateWeight<Runtime>;
+}
+
+impl pallet_task_rewards::Config for Runtime {
+	type TaskDeposit = TaskDeposit;
+	type Currency = Balances;
+	type WeightInfo = pallet_task_rewards::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {

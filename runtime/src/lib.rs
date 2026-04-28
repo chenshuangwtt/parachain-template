@@ -311,6 +311,9 @@ mod runtime {
 
 	#[runtime::pallet_index(60)]
 	pub type Counter = pallet_counter;
+
+	#[runtime::pallet_index(61)]
+	pub type TaskRewards = pallet_task_rewards;
 }
 
 #[docify::export(register_validate_block)]
