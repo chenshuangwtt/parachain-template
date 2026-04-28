@@ -53,12 +53,32 @@ pub mod pallet {
 		TypeInfo,
 		MaxEncodedLen,
 	)]
+	pub struct OldTaskInfo<AccountId, Balance, BlockNumber> {
+		pub creator: AccountId,
+		pub reward: u32,
+		pub deposit: Balance,
+		pub deadline: BlockNumber,
+		pub status: TaskStatus,
+	}
+
+	#[derive(
+		Encode,
+		Decode,
+		Clone,
+		Eq,
+		PartialEq,
+		RuntimeDebug,
+		TypeInfo,
+		MaxEncodedLen,
+	)]
 	pub struct TaskInfo<AccountId, Balance, BlockNumber> {
 		pub creator: AccountId,
 		pub reward: u32,
 		pub deposit: Balance,
 		pub deadline: BlockNumber,
 		pub status: TaskStatus,
+		pub max_submissions: u32,
+		pub submission_count: u32,
 	}
 
     #[derive(
@@ -97,12 +117,15 @@ pub mod pallet {
 		#[pallet::constant]
 		type TaskDeposit: Get<BalanceOf<Self>>;
 
+		#[pallet::constant]
+		type DefaultMaxSubmissions: Get<u32>;
+
 		type Currency: ReservableCurrency<<Self as frame_system::Config>::AccountId>;
 
 		type WeightInfo: crate::weights::WeightInfo;
 	}
 
-	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
 
 	#[pallet::pallet]
 	#[pallet::storage_version(STORAGE_VERSION)]
@@ -158,6 +181,7 @@ pub mod pallet {
 			reward: u32,
 			deposit: BalanceOf<T>,
 			deadline: BlockNumberFor<T>,
+			max_submissions: u32,
 		},
 
         TaskSubmitted {
@@ -190,6 +214,7 @@ pub mod pallet {
 	pub enum Error<T> {
 		InvalidReward,
 		InvalidDeadline,
+		InvalidMaxSubmissions,
 		TaskIdOverflow,
         TaskNotFound,
         TaskClosed,
@@ -200,8 +225,45 @@ pub mod pallet {
 		ScoreOverflow,
 		NotTaskCreator,
 		TaskAlreadyClosed,
-		NotReviewer
+		NotReviewer,
+		MaxSubmissionsReached,
 	}
+
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_runtime_upgrade() -> Weight {
+			let onchain_version = Pallet::<T>::on_chain_storage_version();
+
+			if onchain_version == StorageVersion::new(1) {
+				let mut migrated: u64 = 0;
+
+				Tasks::<T>::translate::<OldTaskInfo<
+					<T as frame_system::Config>::AccountId,
+					BalanceOf<T>,
+					BlockNumberFor<T>,
+				>, _>(|_task_id, old_task| {
+					migrated = migrated.saturating_add(1);
+
+					Some(TaskInfo {
+						creator: old_task.creator,
+						reward: old_task.reward,
+						deposit: old_task.deposit,
+						deadline: old_task.deadline,
+						status: old_task.status,
+						max_submissions: T::DefaultMaxSubmissions::get(),
+						submission_count: 0,
+					})
+				});
+
+				STORAGE_VERSION.put::<Pallet<T>>();
+
+				T::DbWeight::get().reads_writes(migrated + 1, migrated + 1)
+			} else {
+				T::DbWeight::get().reads(1)
+			}
+		}
+	}
+
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -211,10 +273,13 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			reward: u32,
 			deadline: BlockNumberFor<T>,
+			max_submissions: u32,
 		) -> DispatchResult {
 			let creator = ensure_signed(origin)?;
 
 			ensure!(reward > 0, Error::<T>::InvalidReward);
+
+			ensure!(max_submissions > 0, Error::<T>::InvalidMaxSubmissions);
 
 			let current_block: BlockNumberFor<T> = frame_system::Pallet::<T>::block_number();
             ensure!(deadline > current_block, Error::<T>::InvalidDeadline);
@@ -233,6 +298,8 @@ pub mod pallet {
 				deposit,
 				deadline,
 				status: TaskStatus::Open,
+				max_submissions,
+				submission_count: 0,
 			};
 
 			Tasks::<T>::insert(task_id, task);
@@ -244,6 +311,7 @@ pub mod pallet {
 				reward,
 				deposit,
 				deadline,
+				max_submissions,
 			});
 
 			Ok(())
@@ -258,41 +326,53 @@ pub mod pallet {
         ) -> DispatchResult {
             let who = ensure_signed(origin)?;
 
-            let task = Tasks::<T>::get(task_id)
-                .ok_or(Error::<T>::TaskNotFound)?;
+			ensure!(
+				!Submissions::<T>::contains_key(task_id, &who),
+				Error::<T>::AlreadySubmitted
+			);
 
-            ensure!(
-                task.status == TaskStatus::Open,
-                Error::<T>::TaskClosed
-            );
+			let current_block: BlockNumberFor<T> =
+				frame_system::Pallet::<T>::block_number();
 
-            let current_block: BlockNumberFor<T> =
-                frame_system::Pallet::<T>::block_number();
+			Tasks::<T>::try_mutate(task_id, |maybe_task| -> DispatchResult {
+				let task = maybe_task
+					.as_mut()
+					.ok_or(Error::<T>::TaskNotFound)?;
 
-            ensure!(
-                current_block <= task.deadline,
-                Error::<T>::DeadlinePassed
-            );
+				ensure!(
+					task.status == TaskStatus::Open,
+					Error::<T>::TaskClosed
+				);
 
-            ensure!(
-                !Submissions::<T>::contains_key(task_id, &who),
-                Error::<T>::AlreadySubmitted
-            );
+				ensure!(
+					current_block <= task.deadline,
+					Error::<T>::DeadlinePassed
+				);
 
-            let submission = SubmissionInfo {
-                submitted_at: current_block,
-                status: SubmissionStatus::Pending,
-            };
+				ensure!(
+					task.submission_count < task.max_submissions,
+					Error::<T>::MaxSubmissionsReached
+				);
 
-            Submissions::<T>::insert(task_id, &who, submission);
+				task.submission_count = task.submission_count
+					.checked_add(1)
+					.ok_or(Error::<T>::MaxSubmissionsReached)?;
 
-            Self::deposit_event(Event::TaskSubmitted {
-                task_id,
-                who,
-                submitted_at: current_block,
-            });
+				let submission = SubmissionInfo {
+					submitted_at: current_block,
+					status: SubmissionStatus::Pending,
+				};
 
-            Ok(())
+				Submissions::<T>::insert(task_id, &who, submission);
+
+				Self::deposit_event(Event::TaskSubmitted {
+					task_id,
+					who,
+					submitted_at: current_block,
+				});
+
+            	Ok(())
+			})
         }
 
 		#[pallet::call_index(2)]

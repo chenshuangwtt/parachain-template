@@ -210,6 +210,7 @@ impl pallet_counter::Config for Runtime {
 
 impl pallet_task_rewards::Config for Runtime {
 	type TaskDeposit = TaskDeposit;
+	type DefaultMaxSubmissions = DefaultMaxSubmissions;
 	type Currency = Balances;
 	type WeightInfo = pallet_task_rewards::weights::SubstrateWeight<Runtime>;
 }
@@ -220,6 +221,8 @@ parameter_types! {
 	pub const RelayOrigin: AggregateMessageOrigin = AggregateMessageOrigin::Parent;
 	pub const MaxCounterValue: u32 = 100;
 	pub const CounterDeposit: Balance = UNIT;
+
+	pub const DefaultMaxSubmissions: u32 = 100;
 }
 
 impl cumulus_pallet_parachain_system::Config for Runtime {

@@ -52,6 +52,8 @@ impl frame_system::Config for Test {
 parameter_types! {
 	pub const ExistentialDeposit: u64 = 1;
 	pub const TaskDeposit: u64 = 10;
+
+	pub const DefaultMaxSubmissions: u32 = 100;
 }
 
 impl pallet_balances::Config for Test {
@@ -73,6 +75,7 @@ impl pallet_balances::Config for Test {
 
 impl pallet_task_rewards::Config for Test {
 	type TaskDeposit = TaskDeposit;
+	type DefaultMaxSubmissions = DefaultMaxSubmissions;
 	type Currency = Balances;
 	type WeightInfo = ();
 }

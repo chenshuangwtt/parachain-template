@@ -24,6 +24,7 @@ mod benchmarks {
 		creator: &T::AccountId,
 		reward: u32,
 		deadline: BlockNumberFor<T>,
+		max_submissions: u32,
 	) -> TaskId {
 		let task_id = NextTaskId::<T>::get();
 
@@ -38,6 +39,8 @@ mod benchmarks {
 			deposit,
 			deadline,
 			status: TaskStatus::Open,
+			max_submissions,
+			submission_count: 0,
 		};
 
 		Tasks::<T>::insert(task_id, task);
@@ -70,8 +73,10 @@ mod benchmarks {
 
         let deadline = current_block + 100u32.into();
 
+		let max_submissions: u32 = 100;
+
 		#[extrinsic_call]
-		create_task(RawOrigin::Signed(caller.clone()), reward, deadline);
+		create_task(RawOrigin::Signed(caller.clone()), reward, deadline,max_submissions);
 
 		let task = Tasks::<T>::get(0).expect("task should exist");
 
@@ -81,6 +86,8 @@ mod benchmarks {
 		assert_eq!(task.deposit, T::TaskDeposit::get());
 		assert_eq!(task.deadline, deadline);
 		assert_eq!(task.status, TaskStatus::Open);
+		assert_eq!(task.max_submissions, max_submissions);
+		assert_eq!(task.submission_count, 0);
 	}
 
 	#[benchmark]
@@ -95,8 +102,8 @@ mod benchmarks {
         frame_system::Pallet::<T>::set_block_number(current_block);
 
         let deadline = current_block + 100u32.into();
-
-		let task_id = create_open_task::<T>(&creator, 10, deadline);
+		
+		let task_id = create_open_task::<T>(&creator, 10, deadline, 100);
 
 		#[extrinsic_call]
 		submit_task(RawOrigin::Signed(submitter.clone()), task_id);
@@ -106,6 +113,9 @@ mod benchmarks {
 
 		assert_eq!(submission.submitted_at, current_block);
 		assert_eq!(submission.status, SubmissionStatus::Pending);
+
+		let task = Tasks::<T>::get(task_id).expect("task should exist");
+		assert_eq!(task.submission_count, 1);
 	}
 
 	#[benchmark]
@@ -122,7 +132,7 @@ mod benchmarks {
 		let deadline = current_block + 100u32.into();
 
 		let reward: u32 = 10;
-		let task_id = create_open_task::<T>(&creator, reward, deadline);
+		let task_id = create_open_task::<T>(&creator, 10, deadline, 100);
 		create_pending_submission::<T>(task_id, &submitter, current_block);
 
 		#[extrinsic_call]
@@ -154,7 +164,7 @@ mod benchmarks {
 
 		let deadline = current_block + 100u32.into();
 
-		let task_id = create_open_task::<T>(&creator, 10, deadline);
+		let task_id = create_open_task::<T>(&creator, 10, deadline, 100);
 		create_pending_submission::<T>(task_id, &submitter, current_block);
 
 		#[extrinsic_call]
@@ -181,7 +191,7 @@ mod benchmarks {
         frame_system::Pallet::<T>::set_block_number(current_block);
         let deadline = current_block + 100u32.into();
 
-		let task_id = create_open_task::<T>(&creator, 10, deadline);
+		let task_id = create_open_task::<T>(&creator, 10, deadline, 100);
 
 		#[extrinsic_call]
 		close_task(RawOrigin::Signed(creator.clone()), task_id);

@@ -10,6 +10,13 @@ use crate::{
 };
 
 use frame::testing_prelude::*;
+use frame::deps::{
+	frame_support::{
+		storage::unhashed,
+		traits::{OnRuntimeUpgrade, StorageVersion},
+	},
+};
+
 
 #[test]
 fn create_task_works_and_reserves_deposit() {
@@ -22,7 +29,8 @@ fn create_task_works_and_reserves_deposit() {
 		assert_ok!(TaskRewards::create_task(
 			RuntimeOrigin::signed(1),
 			10,
-			100
+			100,
+			2
 		));
 
 		assert_eq!(NextTaskId::<Test>::get(), 1);
@@ -35,6 +43,8 @@ fn create_task_works_and_reserves_deposit() {
 		assert_eq!(task.deposit, 10);
 		assert_eq!(task.deadline, 100);
 		assert_eq!(task.status, TaskStatus::Open);
+		assert_eq!(task.max_submissions, 2);
+		assert_eq!(task.submission_count, 0);
 	});
 }
 
@@ -44,7 +54,7 @@ fn create_task_rejects_invalid_reward() {
 		System::set_block_number(1);
 
 		assert_noop!(
-			TaskRewards::create_task(RuntimeOrigin::signed(1), 0, 100),
+			TaskRewards::create_task(RuntimeOrigin::signed(1), 0, 100, 2),
 			Error::<Test>::InvalidReward
 		);
 	});
@@ -56,12 +66,12 @@ fn create_task_rejects_invalid_deadline() {
 		System::set_block_number(10);
 
 		assert_noop!(
-			TaskRewards::create_task(RuntimeOrigin::signed(1), 10, 10),
+			TaskRewards::create_task(RuntimeOrigin::signed(1), 10, 10, 2),
 			Error::<Test>::InvalidDeadline
 		);
 
 		assert_noop!(
-			TaskRewards::create_task(RuntimeOrigin::signed(1), 10, 9),
+			TaskRewards::create_task(RuntimeOrigin::signed(1), 10, 9, 2),
 			Error::<Test>::InvalidDeadline
 		);
 	});
@@ -75,7 +85,8 @@ fn submit_task_works() {
 		assert_ok!(TaskRewards::create_task(
 			RuntimeOrigin::signed(1),
 			10,
-			100
+			100,
+			2
 		));
 
 		System::set_block_number(5);
@@ -101,7 +112,8 @@ fn submit_task_rejects_duplicate_submission() {
 		assert_ok!(TaskRewards::create_task(
 			RuntimeOrigin::signed(1),
 			10,
-			100
+			100,
+			2
 		));
 
 		assert_ok!(TaskRewards::submit_task(
@@ -136,7 +148,8 @@ fn submit_task_rejects_after_deadline() {
 		assert_ok!(TaskRewards::create_task(
 			RuntimeOrigin::signed(1),
 			10,
-			5
+			5,
+			2
 		));
 
 		System::set_block_number(6);
@@ -156,7 +169,8 @@ fn approve_submission_works_and_adds_score() {
 		assert_ok!(TaskRewards::create_task(
 			RuntimeOrigin::signed(1),
 			10,
-			100
+			100,
+			2
 		));
 
 		assert_ok!(TaskRewards::submit_task(
@@ -188,7 +202,8 @@ fn reject_submission_works_without_score() {
 		assert_ok!(TaskRewards::create_task(
 			RuntimeOrigin::signed(1),
 			10,
-			100
+			100,
+			2
 		));
 
 		assert_ok!(TaskRewards::submit_task(
@@ -218,7 +233,8 @@ fn close_task_works_and_unreserves_deposit() {
 		assert_ok!(TaskRewards::create_task(
 			RuntimeOrigin::signed(1),
 			10,
-			100
+			100,
+			2
 		));
 
 		assert_eq!(Balances::reserved_balance(1), 10);
@@ -243,7 +259,8 @@ fn close_task_rejects_non_creator() {
 		assert_ok!(TaskRewards::create_task(
 			RuntimeOrigin::signed(1),
 			10,
-			100
+			100,
+			2
 		));
 
 		assert_noop!(
@@ -261,7 +278,8 @@ fn approve_submission_rejects_non_creator() {
 		assert_ok!(TaskRewards::create_task(
 			RuntimeOrigin::signed(1),
 			10,
-			100
+			100,
+			2
 		));
 
 		assert_ok!(TaskRewards::submit_task(
@@ -272,6 +290,74 @@ fn approve_submission_rejects_non_creator() {
 		assert_noop!(
 			TaskRewards::approve_submission(RuntimeOrigin::signed(3), 0, 2),
 			Error::<Test>::NotTaskCreator
+		);
+	});
+}
+
+
+#[test]
+fn submit_task_rejects_when_max_submissions_reached() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+
+		assert_ok!(TaskRewards::create_task(
+			RuntimeOrigin::signed(1),
+			10,
+			100,
+			1
+		));
+
+		assert_ok!(TaskRewards::submit_task(
+			RuntimeOrigin::signed(2),
+			0
+		));
+
+		assert_noop!(
+			TaskRewards::submit_task(RuntimeOrigin::signed(3), 0),
+			Error::<Test>::MaxSubmissionsReached
+		);
+
+		let task = Tasks::<Test>::get(0).expect("task should exist");
+		assert_eq!(task.submission_count, 1);
+	});
+}
+
+
+#[test]
+fn migration_v1_to_v2_works() {
+	new_test_ext().execute_with(|| {
+		System::set_block_number(1);
+
+		let old_task: crate::OldTaskInfo<u64, u64, BlockNumberFor<Test>> =
+			crate::OldTaskInfo {
+				creator: 1u64,
+				reward: 10u32,
+				deposit: 10u64,
+				deadline: 100u64,
+				status: TaskStatus::Open,
+			};
+
+		let key = Tasks::<Test>::hashed_key_for(0u32);
+		unhashed::put(&key, &old_task);
+
+		StorageVersion::new(1).put::<TaskRewards>();
+
+		let _weight =
+			<TaskRewards as OnRuntimeUpgrade>::on_runtime_upgrade();
+
+		let task = Tasks::<Test>::get(0u32).expect("task should be migrated");
+
+		assert_eq!(task.creator, 1);
+		assert_eq!(task.reward, 10);
+		assert_eq!(task.deposit, 10);
+		assert_eq!(task.deadline, 100);
+		assert_eq!(task.status, TaskStatus::Open);
+		assert_eq!(task.max_submissions, 100);
+		assert_eq!(task.submission_count, 0);
+
+		assert_eq!(
+			TaskRewards::on_chain_storage_version(),
+			StorageVersion::new(2)
 		);
 	});
 }
