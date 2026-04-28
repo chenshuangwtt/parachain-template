@@ -21,27 +21,13 @@ pub mod pallet {
     use frame::deps::frame_support::traits::{Currency, ReservableCurrency};
     use crate::weights::WeightInfo;
 
-    const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
+    const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
     #[pallet::pallet]
     #[pallet::storage_version(STORAGE_VERSION)]
     pub struct Pallet<T>(_);
 
-    #[derive(
-        Encode,
-        Decode,
-        Clone,
-        Eq,
-        PartialEq,
-        RuntimeDebug,
-        TypeInfo,
-        MaxEncodedLen,
-    )]
-    pub struct CounterInfo<Balance> {
-        pub value: u32,
-        pub deposit: Balance,
-    }
-
+  
 
     #[pallet::config]
     pub trait Config: frame_system::Config<RuntimeEvent: From<Event<Self>>>  {
@@ -88,37 +74,10 @@ pub mod pallet {
         _,
         Blake2_128Concat,
         <T as frame_system::Config>::AccountId,
-        CounterInfo<BalanceOf<T>>,
+        u32,
         OptionQuery,
     >;
 
-    #[pallet::hooks]
-    impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-        fn on_runtime_upgrade() -> Weight {
-            let onchain_version = Pallet::<T>::on_chain_storage_version();
-
-            if onchain_version == StorageVersion::new(1) {
-                let mut migrated: u64 = 0;
-
-                Counters::<T>::translate::<u32, _>(
-                    |_account: <T as frame_system::Config>::AccountId, old_value: u32| {
-                        migrated = migrated.saturating_add(1);
-
-                        Some(CounterInfo {
-                            value: old_value,
-                            deposit: T::CounterDeposit::get(),
-                        })
-                    }
-                );
-
-                STORAGE_VERSION.put::<Pallet<T>>();
-
-                T::DbWeight::get().reads_writes(migrated + 1, migrated + 1)
-            } else {
-                T::DbWeight::get().reads(1)
-            }
-        }
-    }
 
 
     #[pallet::event]
@@ -153,39 +112,32 @@ pub mod pallet {
         pub fn increment(origin: OriginFor<T>) -> DispatchResult {
             let who = ensure_signed(origin)?;
 
-            let info = match Counters::<T>::get(&who) {
-                Some(mut info) => {
-                    let new_value = info
-                        .value
-                        .checked_add(1)
-                        .ok_or(Error::<T>::Overflow)?;
+            let old_value = Counters::<T>::get(&who);
 
-                    ensure!(
-                        new_value <= T::MaxCounterValue::get(),
-                        Error::<T>::CounterTooLarge
-                    );
-
-                    info.value = new_value;
-                    info
-                },
+            let current_value = match old_value {
+                Some(value) => value,
                 None => {
-                    let deposit = T::CounterDeposit::get();
-
-                    T::Currency::reserve(&who, deposit)?;
-
-                    CounterInfo {
-                        value: 1,
-                        deposit,
-                    }
+                    T::Currency::reserve(&who, T::CounterDeposit::get())?;
+                    0
                 },
             };
 
-            Counters::<T>::insert(&who, &info);
+            let new_value = current_value
+                .checked_add(1)
+                .ok_or(Error::<T>::Overflow)?;
+
+            ensure!(
+                new_value <= T::MaxCounterValue::get(),
+                Error::<T>::CounterTooLarge
+            );
+
+            Counters::<T>::insert(&who, new_value);
 
             Self::deposit_event(Event::Incremented {
                 who,
-                value: info.value,
+                value: new_value,
             });
+
 
             Ok(())
         }
@@ -200,24 +152,11 @@ pub mod pallet {
                 Error::<T>::CounterTooLarge
             );
 
-            let info = match Counters::<T>::get(&who) {
-                Some(mut info) => {
-                    info.value = value;
-                    info
-                },
-                None => {
-                    let deposit = T::CounterDeposit::get();
+            if Counters::<T>::get(&who).is_none() {
+                T::Currency::reserve(&who, T::CounterDeposit::get())?;
+            }
 
-                    T::Currency::reserve(&who, deposit)?;
-
-                    CounterInfo {
-                        value,
-                        deposit,
-                    }
-                },
-            };
-
-            Counters::<T>::insert(&who, &info);
+            Counters::<T>::insert(&who, value);
 
             Self::deposit_event(Event::ValueSet {
                 who,
@@ -233,18 +172,20 @@ pub mod pallet {
         pub fn remove_counter(origin: OriginFor<T>) -> DispatchResult {
             let who = ensure_signed(origin)?;
 
-            let info = Counters::<T>::get(&who)
+            let value = Counters::<T>::get(&who)
                 .ok_or(Error::<T>::CounterNotFound)?;
 
             Counters::<T>::remove(&who);
 
-            T::Currency::unreserve(&who, info.deposit);
+            let deposit = T::CounterDeposit::get();
+            T::Currency::unreserve(&who, deposit);
 
             Self::deposit_event(Event::CounterRemoved {
                 who,
-                value: info.value,
-                deposit: info.deposit,
+                value,
+                deposit,
             });
+            
             Ok(())
         }
     }

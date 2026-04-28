@@ -25,9 +25,7 @@ mod benchmarks {
 		#[extrinsic_call]
 		increment(RawOrigin::Signed(caller.clone()));
 
-		let info = Counters::<T>::get(&caller).expect("counter should exist");
-		assert_eq!(info.value, 1);
-		assert_eq!(info.deposit, T::CounterDeposit::get());
+		assert_eq!(Counters::<T>::get(&caller), Some(1));
 	}
 
 	#[benchmark]
@@ -43,9 +41,7 @@ mod benchmarks {
 		#[extrinsic_call]
 		set_value(RawOrigin::Root, caller.clone(), value);
 
-		let info = Counters::<T>::get(&caller).expect("counter should exist");
-		assert_eq!(info.value, value);
-		assert_eq!(info.deposit, T::CounterDeposit::get());
+		assert_eq!(Counters::<T>::get(&caller), Some(value));
 	}
 
 	#[benchmark]
@@ -60,9 +56,7 @@ mod benchmarks {
 		Pallet::<T>::increment(RawOrigin::Signed(caller.clone()).into())
 			.expect("increment should work");
 
-		let info = Counters::<T>::get(&caller).expect("counter should exist");
-		assert_eq!(info.value, 1);
-		assert_eq!(info.deposit, T::CounterDeposit::get());
+		assert_eq!(Counters::<T>::get(&caller), Some(1));
 
 		#[extrinsic_call]
 		remove_counter(RawOrigin::Signed(caller.clone()));
