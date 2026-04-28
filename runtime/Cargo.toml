@@ -26,6 +26,7 @@ polkadot-sdk = { workspace = true, features = ["assets-common", "cumulus-pallet-
 scale-info = { features = ["derive"], workspace = true }
 serde_json = { workspace = true, default-features = false, features = ["alloc"] }
 smallvec = { workspace = true, default-features = true }
+pallet-counter = { path = "../pallets/counter", default-features = false }
 
 [build-dependencies]
 docify = { workspace = true }
@@ -42,6 +43,7 @@ std = [
 	"scale-info/std",
 	"serde_json/std",
 	"substrate-wasm-builder",
+	"pallet-counter/std",
 ]
 runtime-benchmarks = [
 	"cumulus-pallet-parachain-system/runtime-benchmarks",

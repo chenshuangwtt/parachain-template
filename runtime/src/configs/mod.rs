@@ -63,7 +63,7 @@ use super::{
 	MessageQueue, Nonce, PalletInfo, ParachainSystem, Runtime, RuntimeCall, RuntimeEvent,
 	RuntimeFreezeReason, RuntimeHoldReason, RuntimeOrigin, RuntimeTask, Session, SessionKeys,
 	System, WeightToFee, XcmpQueue, AVERAGE_ON_INITIALIZE_RATIO, CENTS, EXISTENTIAL_DEPOSIT, HOURS,
-	MAXIMUM_BLOCK_WEIGHT, MICRO_UNIT, NORMAL_DISPATCH_RATIO, SLOT_DURATION, VERSION,
+	MAXIMUM_BLOCK_WEIGHT, MICRO_UNIT, NORMAL_DISPATCH_RATIO, SLOT_DURATION, VERSION,UNIT,
 };
 use xcm_config::{RelayLocation, XcmOriginToTransactDispatchOrigin};
 
@@ -198,10 +198,20 @@ impl pallet_sudo::Config for Runtime {
 	type WeightInfo = ();
 }
 
+impl pallet_counter::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+	type MaxCounterValue = MaxCounterValue;
+	type Currency = Balances;
+    type CounterDeposit = CounterDeposit;
+	type WeightInfo = pallet_counter::weights::SubstrateWeight<Runtime>;
+}
+
 parameter_types! {
 	pub const ReservedXcmpWeight: Weight = MAXIMUM_BLOCK_WEIGHT.saturating_div(4);
 	pub const ReservedDmpWeight: Weight = MAXIMUM_BLOCK_WEIGHT.saturating_div(4);
 	pub const RelayOrigin: AggregateMessageOrigin = AggregateMessageOrigin::Parent;
+	pub const MaxCounterValue: u32 = 100;
+	pub const CounterDeposit: Balance = UNIT;
 }
 
 impl cumulus_pallet_parachain_system::Config for Runtime {
