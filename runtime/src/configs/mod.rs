@@ -59,7 +59,7 @@ use xcm::latest::prelude::{AssetId, BodyId};
 // Local module imports
 use super::{
 	weights::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight},
-	AccountId, Assets, Aura, Balance, Balances, Block, BlockNumber, CollatorSelection, ConsensusHook, Hash, Identity,
+	AccountId, Assets, Aura, Balance, Balances, Block, BlockNumber, CollatorSelection, ConsensusHook, Hash, ReviewCommittee, 
 	MessageQueue, Nonce, PalletInfo, ParachainSystem, Runtime, RuntimeCall, RuntimeEvent,
 	RuntimeFreezeReason, RuntimeHoldReason, RuntimeOrigin, RuntimeTask, Session, SessionKeys,
 	System, WeightToFee, XcmpQueue, AVERAGE_ON_INITIALIZE_RATIO, CENTS, EXISTENTIAL_DEPOSIT, HOURS,
@@ -253,6 +253,54 @@ impl pallet_tasks::Config for Runtime {
 
 	type WeightInfo = pallet_tasks::weights::SubstrateWeight<Runtime>;
 }
+
+parameter_types! {
+	pub const ReviewMotionDuration: BlockNumber = 5 * HOURS;
+	pub const ReviewMaxProposals: u32 = 100;
+	pub const ReviewMaxMembers: u32 = 100;
+	pub const ReviewMaxProposalWeight: Weight = MAXIMUM_BLOCK_WEIGHT;
+}
+
+
+impl pallet_collective::Config for Runtime {
+	type RuntimeOrigin = RuntimeOrigin;
+	type Proposal = RuntimeCall;
+	type RuntimeEvent = RuntimeEvent;
+
+	type MotionDuration = ReviewMotionDuration;
+	type MaxProposals = ReviewMaxProposals;
+	type MaxMembers = ReviewMaxMembers;
+
+	type DefaultVote = pallet_collective::PrimeDefaultVote;
+	type SetMembersOrigin = frame_system::EnsureRoot<AccountId>;
+
+	type MaxProposalWeight = ReviewMaxProposalWeight;
+	type DisapproveOrigin = frame_system::EnsureRoot<AccountId>;
+	type KillOrigin = frame_system::EnsureRoot<AccountId>;
+	type Consideration = ();
+
+	type WeightInfo = pallet_collective::weights::SubstrateWeight<Runtime>;
+}
+
+
+
+impl pallet_membership::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+
+	type AddOrigin = frame_system::EnsureRoot<AccountId>;
+	type RemoveOrigin = frame_system::EnsureRoot<AccountId>;
+	type SwapOrigin = frame_system::EnsureRoot<AccountId>;
+	type ResetOrigin = frame_system::EnsureRoot<AccountId>;
+	type PrimeOrigin = frame_system::EnsureRoot<AccountId>;
+
+	type MembershipInitialized = ReviewCommittee;
+	type MembershipChanged = ReviewCommittee;
+
+	type MaxMembers = ReviewMaxMembers;
+
+	type WeightInfo = pallet_membership::weights::SubstrateWeight<Runtime>;
+}
+
 
 
 parameter_types! {

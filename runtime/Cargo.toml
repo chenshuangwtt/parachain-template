@@ -26,7 +26,8 @@ polkadot-sdk = { workspace = true, features = ["assets-common", "cumulus-pallet-
 		"cumulus-pallet-session-benchmarking", "cumulus-pallet-weight-reclaim", "cumulus-pallet-xcm", 
 		"cumulus-pallet-xcmp-queue", "cumulus-primitives-aura", "cumulus-primitives-core", "cumulus-primitives-utility", 
 		"pallet-aura", "pallet-authorship", "pallet-balances", "pallet-collator-selection", "pallet-message-queue", 
-		"pallet-session", "pallet-sudo", "pallet-timestamp", "pallet-assets", "pallet-identity", "pallet-transaction-payment", 
+		"pallet-session", "pallet-sudo", "pallet-timestamp", "pallet-assets", "pallet-identity",
+		"pallet-collective", "pallet-membership", "pallet-transaction-payment", 
 		"pallet-transaction-payment-rpc-runtime-api", "pallet-xcm", "parachains-common", "polkadot-parachain-primitives", 
 		"polkadot-runtime-common", "runtime", "staging-parachain-info", "staging-xcm", "staging-xcm-builder", 
 		"staging-xcm-executor"], default-features = false }

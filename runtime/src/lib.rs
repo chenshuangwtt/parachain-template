@@ -308,6 +308,11 @@ mod runtime {
 	pub type Assets = pallet_assets;
 	#[runtime::pallet_index(35)]
 	pub type Identity = pallet_identity;
+	#[runtime::pallet_index(36)]
+	pub type ReviewCommittee = pallet_collective;
+
+	#[runtime::pallet_index(37)]
+	pub type ReviewMembership = pallet_membership;
 
 	// Template
 	#[runtime::pallet_index(50)]
