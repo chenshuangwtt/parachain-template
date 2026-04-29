@@ -247,7 +247,7 @@ impl pallet_tasks::Config for Runtime {
 	type Assets = Assets;
 	type PointAssetId = PointAssetId;
 
-	type AdminOrigin = frame_system::EnsureRoot<AccountId>;
+	type AdminOrigin = pallet_collective::EnsureProportionAtLeast<AccountId, (), 2, 3>;
 
 	type IdentityVerifier = IdentityJudgementVerifier;
 
