@@ -59,7 +59,7 @@ use xcm::latest::prelude::{AssetId, BodyId};
 // Local module imports
 use super::{
 	weights::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight},
-	AccountId, Aura, Balance, Balances, Block, BlockNumber, CollatorSelection, ConsensusHook, Hash,
+	AccountId, Assets, Aura, Balance, Balances, Block, BlockNumber, CollatorSelection, ConsensusHook, Hash,
 	MessageQueue, Nonce, PalletInfo, ParachainSystem, Runtime, RuntimeCall, RuntimeEvent,
 	RuntimeFreezeReason, RuntimeHoldReason, RuntimeOrigin, RuntimeTask, Session, SessionKeys,
 	System, WeightToFee, XcmpQueue, AVERAGE_ON_INITIALIZE_RATIO, CENTS, EXISTENTIAL_DEPOSIT, HOURS,
@@ -213,6 +213,69 @@ impl pallet_task_rewards::Config for Runtime {
 	type DefaultMaxSubmissions = DefaultMaxSubmissions;
 	type Currency = Balances;
 	type WeightInfo = pallet_task_rewards::weights::SubstrateWeight<Runtime>;
+}
+
+pub type LocalAssetId = u32;
+pub type LocalAssetBalance = u128;
+
+parameter_types! {
+	pub const PointAssetId: LocalAssetId = 1;
+}
+
+impl pallet_tasks::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+
+	type Assets = Assets;
+	type PointAssetId = PointAssetId;
+
+	type AdminOrigin = frame_system::EnsureRoot<AccountId>;
+
+	type WeightInfo = pallet_tasks::weights::SubstrateWeight<Runtime>;
+}
+
+
+parameter_types! {
+    pub const AssetDeposit: Balance = 0;
+    pub const AssetAccountDeposit: Balance = 0;
+    pub const ApprovalDeposit: Balance = 0;
+    pub const StringLimit: u32 = 50;
+    pub const MetadataDepositBase: Balance = 0;
+    pub const MetadataDepositPerByte: Balance = 0;
+    pub const RemoveItemsLimit: u32 = 1000;
+}
+
+impl pallet_assets::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+
+	type Balance = LocalAssetBalance;
+	type AssetId = LocalAssetId;
+	type AssetIdParameter = codec::Compact<LocalAssetId>;
+
+	type ReserveData = ();
+
+	type Currency = Balances;
+
+	type CreateOrigin = frame_system::EnsureSigned<AccountId>;
+	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
+
+	type AssetDeposit = AssetDeposit;
+	type AssetAccountDeposit = AssetAccountDeposit;
+	type MetadataDepositBase = MetadataDepositBase;
+	type MetadataDepositPerByte = MetadataDepositPerByte;
+	type ApprovalDeposit = ApprovalDeposit;
+
+	type StringLimit = StringLimit;
+	type Freezer = ();
+	type Holder = ();
+	type Extra = ();
+	type CallbackHandle = ();
+
+	type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
+
+	type RemoveItemsLimit = RemoveItemsLimit;
+
+	#[cfg(feature = "runtime-benchmarks")]
+	type BenchmarkHelper = ();
 }
 
 parameter_types! {

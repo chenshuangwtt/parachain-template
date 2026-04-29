@@ -304,6 +304,8 @@ mod runtime {
 	pub type CumulusXcm = cumulus_pallet_xcm;
 	#[runtime::pallet_index(33)]
 	pub type MessageQueue = pallet_message_queue;
+	#[runtime::pallet_index(34)]
+	pub type Assets = pallet_assets;
 
 	// Template
 	#[runtime::pallet_index(50)]
@@ -314,6 +316,10 @@ mod runtime {
 
 	#[runtime::pallet_index(61)]
 	pub type TaskRewards = pallet_task_rewards;
+
+	#[runtime::pallet_index(62)]
+	pub type Tasks = pallet_tasks;
+
 }
 
 #[docify::export(register_validate_block)]
