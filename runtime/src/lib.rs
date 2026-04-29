@@ -306,6 +306,8 @@ mod runtime {
 	pub type MessageQueue = pallet_message_queue;
 	#[runtime::pallet_index(34)]
 	pub type Assets = pallet_assets;
+	#[runtime::pallet_index(35)]
+	pub type Identity = pallet_identity;
 
 	// Template
 	#[runtime::pallet_index(50)]

@@ -105,7 +105,7 @@ fn cannot_claim_claimed_task() {
 		assert_ok!(Tasks::claim_task(RuntimeOrigin::signed(2), 0));
 
 		assert_noop!(
-			Tasks::claim_task(RuntimeOrigin::signed(3), 0),
+			Tasks::claim_task(RuntimeOrigin::signed(2), 0),
 			Error::<Test>::TaskNotOpen
 		);
 	});
@@ -206,6 +206,18 @@ fn cannot_reject_before_submit() {
 		assert_noop!(
 			Tasks::reject_task(RuntimeOrigin::root(), 0),
 			Error::<Test>::TaskNotSubmitted
+		);
+	});
+}
+
+#[test]
+fn unverified_user_cannot_claim_task() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100));
+
+		assert_noop!(
+			Tasks::claim_task(RuntimeOrigin::signed(3), 0),
+			Error::<Test>::IdentityNotVerified
 		);
 	});
 }

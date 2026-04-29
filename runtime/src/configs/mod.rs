@@ -59,7 +59,7 @@ use xcm::latest::prelude::{AssetId, BodyId};
 // Local module imports
 use super::{
 	weights::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight},
-	AccountId, Assets, Aura, Balance, Balances, Block, BlockNumber, CollatorSelection, ConsensusHook, Hash,
+	AccountId, Assets, Aura, Balance, Balances, Block, BlockNumber, CollatorSelection, ConsensusHook, Hash, Identity,
 	MessageQueue, Nonce, PalletInfo, ParachainSystem, Runtime, RuntimeCall, RuntimeEvent,
 	RuntimeFreezeReason, RuntimeHoldReason, RuntimeOrigin, RuntimeTask, Session, SessionKeys,
 	System, WeightToFee, XcmpQueue, AVERAGE_ON_INITIALIZE_RATIO, CENTS, EXISTENTIAL_DEPOSIT, HOURS,
@@ -222,6 +222,25 @@ parameter_types! {
 	pub const PointAssetId: LocalAssetId = 1;
 }
 
+pub struct IdentityJudgementVerifier;
+
+impl pallet_tasks::IdentityVerifier<AccountId> for IdentityJudgementVerifier {
+	fn is_verified(who: &AccountId) -> bool {
+		pallet_identity::IdentityOf::<Runtime>::get(who)
+			.map(|registration| {
+				registration.judgements.iter().any(|(_, judgement)| {
+					matches!(
+						judgement,
+						pallet_identity::Judgement::Reasonable
+							| pallet_identity::Judgement::KnownGood
+					)
+				})
+			})
+			.unwrap_or(false)
+	}
+}
+
+
 impl pallet_tasks::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 
@@ -229,6 +248,8 @@ impl pallet_tasks::Config for Runtime {
 	type PointAssetId = PointAssetId;
 
 	type AdminOrigin = frame_system::EnsureRoot<AccountId>;
+
+	type IdentityVerifier = IdentityJudgementVerifier;
 
 	type WeightInfo = pallet_tasks::weights::SubstrateWeight<Runtime>;
 }
@@ -277,6 +298,65 @@ impl pallet_assets::Config for Runtime {
 	#[cfg(feature = "runtime-benchmarks")]
 	type BenchmarkHelper = ();
 }
+
+
+parameter_types! {
+	pub const BasicDeposit: Balance = UNIT;
+	pub const ByteDeposit: Balance = CENTS;
+	pub const UsernameDeposit: Balance = UNIT;
+	pub const SubAccountDeposit: Balance = UNIT;
+	pub const MaxSubAccounts: u32 = 100;
+	pub const MaxAdditionalFields: u32 = 10;
+	pub const MaxRegistrars: u32 = 20;
+	pub const PendingUsernameExpiration: BlockNumber = 7 * 24 * HOURS;
+	pub const UsernameGracePeriod: BlockNumber = 7 * 24 * HOURS;
+	pub const MaxSuffixLength: u32 = 32;
+	pub const MaxUsernameLength: u32 = 64;
+}
+
+pub struct UsernameAuthority;
+
+impl frame_support::traits::TypedGet for UsernameAuthority {
+	type Type = RuntimeCall;
+
+	fn get() -> Self::Type {
+		RuntimeCall::System(frame_system::Call::remark {
+			remark: Default::default(),
+		})
+	}
+}
+
+
+impl pallet_identity::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Currency = Balances;
+
+	type BasicDeposit = BasicDeposit;
+	type ByteDeposit = ByteDeposit;
+	type UsernameDeposit = UsernameDeposit;
+	type SubAccountDeposit = SubAccountDeposit;
+
+	type MaxSubAccounts = MaxSubAccounts;
+	type IdentityInformation = pallet_identity::legacy::IdentityInfo<MaxAdditionalFields>;
+	type MaxRegistrars = MaxRegistrars;
+
+	type Slashed = ();
+
+	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
+	type RegistrarOrigin = frame_system::EnsureRoot<AccountId>;
+	type UsernameAuthorityOrigin = frame_system::EnsureRootWithSuccess<AccountId, UsernameAuthority>;
+
+	type OffchainSignature = sp_runtime::MultiSignature;
+	type SigningPublicKey = sp_runtime::MultiSigner;
+
+	type PendingUsernameExpiration = PendingUsernameExpiration;
+	type UsernameGracePeriod = UsernameGracePeriod;
+	type MaxSuffixLength = MaxSuffixLength;
+	type MaxUsernameLength = MaxUsernameLength;
+
+	type WeightInfo = pallet_identity::weights::SubstrateWeight<Runtime>;
+}
+
 
 parameter_types! {
 	pub const ReservedXcmpWeight: Weight = MAXIMUM_BLOCK_WEIGHT.saturating_div(4);

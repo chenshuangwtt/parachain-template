@@ -24,6 +24,10 @@ use frame::traits::{
     EnsureOrigin,                         // 用于校验调用来源
 };
 
+pub trait IdentityVerifier<AccountId> {
+	fn is_verified(who: &AccountId) -> bool;
+}
+
 #[frame::pallet]  // 声明这是一个 pallet 模块
 pub mod pallet {
     use super::*;   // 引入上层所有导入
@@ -106,6 +110,8 @@ pub mod pallet {
         /// 管理员权限校验（如审批、拒绝只能由管理员调用）
         type AdminOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
+        type IdentityVerifier: crate::IdentityVerifier<Self::AccountId>;
+
         type WeightInfo: weights::WeightInfo;
     }
 
@@ -186,6 +192,8 @@ pub mod pallet {
         MissingAssignee,
         /// 任务 ID 溢出（超过 u32 最大值）
         TaskIdOverflow,
+        
+        IdentityNotVerified,
     }
 
     // ------- 公开调用函数 -------
@@ -244,6 +252,11 @@ pub mod pallet {
             task_id: TaskId,
         ) -> DispatchResult {
             let who = ensure_signed(origin)?;
+
+            ensure!(
+                T::IdentityVerifier::is_verified(&who),
+                Error::<T>::IdentityNotVerified
+            );
 
             // 尝试修改指定任务，闭包内进行状态检查
             Tasks::<T>::try_mutate(task_id, |maybe_task| -> DispatchResult {

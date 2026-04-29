@@ -84,6 +84,15 @@ parameter_types! {
 	pub const RemoveItemsLimit: u32 = 1000;
 }
 
+pub struct TestIdentityVerifier;
+
+impl pallet_tasks::IdentityVerifier<AccountId> for TestIdentityVerifier {
+	fn is_verified(who: &AccountId) -> bool {
+		*who == 2
+	}
+}
+
+
 impl pallet_assets::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 
@@ -130,6 +139,8 @@ impl pallet_tasks::Config for Test {
 	type PointAssetId = PointAssetId;
 
 	type AdminOrigin = frame_system::EnsureRoot<AccountId>;
+
+	type IdentityVerifier = TestIdentityVerifier;
 
 	type WeightInfo = ();
 }
