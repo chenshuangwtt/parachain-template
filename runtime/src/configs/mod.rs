@@ -60,7 +60,7 @@ use xcm::latest::prelude::{AssetId, BodyId};
 use super::{
     weights::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight},
     AccountId, Assets, Aura, Balance, Balances, Block, BlockNumber, CollatorSelection,
-    ConsensusHook, Hash, MessageQueue, Nonce, OriginCaller, PalletInfo, ParachainSystem,
+    ConsensusHook, Hash, MessageQueue, Nfts, Nonce, OriginCaller, PalletInfo, ParachainSystem,
     ReviewCommittee, Runtime, RuntimeCall, RuntimeEvent, RuntimeFreezeReason, RuntimeHoldReason,
     RuntimeOrigin, RuntimeTask, Scheduler, Session, SessionKeys, System, WeightToFee, XcmpQueue,
     AVERAGE_ON_INITIALIZE_RATIO, CENTS, EXISTENTIAL_DEPOSIT, HOURS, MAXIMUM_BLOCK_WEIGHT,
@@ -221,6 +221,7 @@ pub type LocalAssetBalance = u128;
 
 parameter_types! {
     pub const PointAssetId: LocalAssetId = 1;
+    pub const CertificateCollectionId: u32 = 0;
 }
 
 pub struct IdentityJudgementVerifier;
@@ -246,6 +247,9 @@ impl pallet_tasks::Config for Runtime {
 
     type Assets = Assets;
     type PointAssetId = PointAssetId;
+    type CertificateNfts = Nfts;
+    type CertificateCollectionId = CertificateCollectionId;
+    type CertificateItemConfig = pallet_nfts::ItemConfig;
 
     type AdminOrigin = pallet_collective::EnsureProportionAtLeast<AccountId, (), 2, 3>;
 

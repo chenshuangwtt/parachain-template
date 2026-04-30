@@ -23,7 +23,10 @@ use alloc::vec::Vec;
 use frame::prelude::*; // 导入 FRAME 预定义基础类型与宏
 use frame::traits::schedule::{DispatchTime, Named as ScheduleNamed};
 use frame::traits::{
-    tokens::fungibles::{Inspect, Mutate}, // 资产检查与修改 trait
+    tokens::{
+        fungibles::{Inspect, Mutate}, // 资产检查与修改 trait
+        nonfungibles_v2::Mutate as NftMutate,
+    },
     EnsureOrigin,                         // 用于校验调用来源
 };
 
@@ -87,6 +90,20 @@ pub mod pallet {
 
         /// 奖励发放时使用的具体资产 ID（提供者）
         type PointAssetId: Get<AssetIdOf<Self>>;
+
+        type CertificateNfts: NftMutate<
+            Self::AccountId,
+            Self::CertificateItemConfig,
+            ItemId = TaskId,
+        >;
+
+        type CertificateCollectionId: Get<
+            <Self::CertificateNfts as frame::traits::tokens::nonfungibles_v2::Inspect<
+                Self::AccountId,
+            >>::CollectionId,
+        >;
+
+        type CertificateItemConfig: Default;
 
         /// 管理员权限校验（如审批、拒绝只能由管理员调用）
         type AdminOrigin: EnsureOrigin<Self::RuntimeOrigin>;
@@ -343,36 +360,15 @@ pub mod pallet {
             // 仅允许管理员调用
             T::AdminOrigin::ensure_origin(origin)?;
 
-            // 修改任务并取出认领者和奖励额
-            let (assignee, reward) = Tasks::<T>::try_mutate(task_id, |maybe_task| {
-                let task = maybe_task.as_mut().ok_or(Error::<T>::TaskNotFound)?;
+            frame::deps::frame_support::storage::with_transaction(|| {
+                let result = Self::do_approve_task(task_id);
 
-                // 只有 Submitted 状态的任务可以被审批
-                ensure!(
-                    task.status == TaskStatus::Submitted,
-                    Error::<T>::TaskNotSubmitted
-                );
-
-                let assignee = task.assignee.clone().ok_or(Error::<T>::MissingAssignee)?;
-
-                let reward = task.reward;
-
-                // 将状态置为 Approved
-                task.status = TaskStatus::Approved;
-
-                Ok::<_, DispatchError>((assignee, reward))
-            })?;
-
-            // 向认领者铸造奖励资产
-            T::Assets::mint_into(T::PointAssetId::get(), &assignee, reward)?;
-
-            Self::deposit_event(Event::TaskApproved {
-                task_id,
-                assignee,
-                reward,
-            });
-
-            Ok(())
+                if result.is_ok() {
+                    frame::deps::sp_runtime::TransactionOutcome::Commit(result)
+                } else {
+                    frame::deps::sp_runtime::TransactionOutcome::Rollback(result)
+                }
+            })
         }
 
         /// 管理员拒绝一个已提交的任务
@@ -430,6 +426,52 @@ pub mod pallet {
     }
 
     impl<T: Config> Pallet<T> {
+        fn do_approve_task(task_id: TaskId) -> DispatchResult {
+            let (assignee, reward) = {
+                let task = Tasks::<T>::get(task_id).ok_or(Error::<T>::TaskNotFound)?;
+
+                // 只有 Submitted 状态的任务可以被审批
+                ensure!(
+                    task.status == TaskStatus::Submitted,
+                    Error::<T>::TaskNotSubmitted
+                );
+
+                let assignee = task.assignee.clone().ok_or(Error::<T>::MissingAssignee)?;
+
+                (assignee, task.reward)
+            };
+
+            // 向认领者铸造奖励资产
+            T::Assets::mint_into(T::PointAssetId::get(), &assignee, reward)?;
+
+            let collection_id = T::CertificateCollectionId::get();
+            T::CertificateNfts::mint_into(
+                &collection_id,
+                &task_id,
+                &assignee,
+                &T::CertificateItemConfig::default(),
+                true,
+            )?;
+
+            Tasks::<T>::try_mutate(task_id, |maybe_task| -> DispatchResult {
+                let task = maybe_task.as_mut().ok_or(Error::<T>::TaskNotFound)?;
+                ensure!(
+                    task.status == TaskStatus::Submitted,
+                    Error::<T>::TaskNotSubmitted
+                );
+                task.status = TaskStatus::Approved;
+                Ok(())
+            })?;
+
+            Self::deposit_event(Event::TaskApproved {
+                task_id,
+                assignee,
+                reward,
+            });
+
+            Ok(())
+        }
+
         fn close_schedule_name(task_id: TaskId) -> Vec<u8> {
             (b"tasks-close", task_id).encode()
         }

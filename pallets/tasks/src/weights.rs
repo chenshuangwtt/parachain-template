@@ -60,11 +60,14 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 	/// Storage: `Tasks::Tasks` (r:1 w:1)
 	/// Storage: `Assets::Asset` (r:1 w:1)
 	/// Storage: `Assets::Account` (r:1 w:1)
+	/// Storage: `Nfts::Collection` (r:1 w:1)
+	/// Storage: `Nfts::Item` (r:1 w:1)
+	/// Storage: `Nfts::Account` (r:0 w:1)
 	fn approve_task() -> Weight {
-		Weight::from_parts(45_000_000, 0)
-			.saturating_add(Weight::from_parts(0, 5000))
-			.saturating_add(T::DbWeight::get().reads(3))
-			.saturating_add(T::DbWeight::get().writes(3))
+		Weight::from_parts(80_000_000, 0)
+			.saturating_add(Weight::from_parts(0, 8000))
+			.saturating_add(T::DbWeight::get().reads(5))
+			.saturating_add(T::DbWeight::get().writes(6))
 	}
 
 	/// Storage: `Tasks::Tasks` (r:1 w:1)
@@ -108,10 +111,10 @@ impl WeightInfo for () {
 	}
 
 	fn approve_task() -> Weight {
-		Weight::from_parts(45_000_000, 0)
-			.saturating_add(Weight::from_parts(0, 5000))
-			.saturating_add(RocksDbWeight::get().reads(3))
-			.saturating_add(RocksDbWeight::get().writes(3))
+		Weight::from_parts(80_000_000, 0)
+			.saturating_add(Weight::from_parts(0, 8000))
+			.saturating_add(RocksDbWeight::get().reads(5))
+			.saturating_add(RocksDbWeight::get().writes(6))
 	}
 
 	fn reject_task() -> Weight {

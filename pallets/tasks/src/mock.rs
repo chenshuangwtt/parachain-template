@@ -1,17 +1,21 @@
 use crate as pallet_tasks;
 
 use frame::deps::{
-    frame_support::{assert_ok, construct_runtime, derive_impl, parameter_types, traits::ConstU32},
+    frame_support::{
+        assert_ok, construct_runtime, derive_impl, parameter_types,
+        traits::{AsEnsureOriginWithArg, ConstU32},
+    },
     frame_system,
     sp_core::H256,
     sp_io,
     sp_runtime::{
+        testing::{TestSignature, UintAuthorityId},
         traits::{BlakeTwo256, IdentityLookup},
         BuildStorage,
     },
 };
 
-use polkadot_sdk::{pallet_assets, pallet_balances, pallet_scheduler};
+use polkadot_sdk::{pallet_assets, pallet_balances, pallet_nfts, pallet_scheduler};
 
 pub type AccountId = u64;
 pub type Balance = u128;
@@ -26,6 +30,7 @@ construct_runtime!(
         System: frame_system,
         Balances: pallet_balances,
         Assets: pallet_assets,
+        Nfts: pallet_nfts,
         Scheduler: pallet_scheduler,
         Tasks: pallet_tasks,
     }
@@ -126,6 +131,57 @@ impl pallet_assets::Config for Test {
     type BenchmarkHelper = ();
 }
 
+pub type NftCollectionId = u32;
+pub type NftItemId = u32;
+
+parameter_types! {
+    pub const NftCollectionDeposit: Balance = 0;
+    pub const NftItemDeposit: Balance = 0;
+    pub const NftMetadataDepositBase: Balance = 0;
+    pub const NftAttributeDepositBase: Balance = 0;
+    pub const NftDepositPerByte: Balance = 0;
+    pub const NftStringLimit: u32 = 256;
+    pub const NftKeyLimit: u32 = 64;
+    pub const NftValueLimit: u32 = 256;
+    pub const NftApprovalsLimit: u32 = 20;
+    pub const NftItemAttributesApprovalsLimit: u32 = 20;
+    pub const NftMaxTips: u32 = 10;
+    pub const NftMaxDeadlineDuration: u64 = 100;
+    pub const NftMaxAttributesPerCall: u32 = 10;
+    pub storage NftFeatures: pallet_nfts::PalletFeatures =
+        pallet_nfts::PalletFeatures::all_enabled();
+}
+
+impl pallet_nfts::Config for Test {
+    type RuntimeEvent = RuntimeEvent;
+    type CollectionId = NftCollectionId;
+    type ItemId = NftItemId;
+    type Currency = Balances;
+    type ForceOrigin = frame_system::EnsureRoot<AccountId>;
+    type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<AccountId>>;
+    type Locker = ();
+    type CollectionDeposit = NftCollectionDeposit;
+    type ItemDeposit = NftItemDeposit;
+    type MetadataDepositBase = NftMetadataDepositBase;
+    type AttributeDepositBase = NftAttributeDepositBase;
+    type DepositPerByte = NftDepositPerByte;
+    type StringLimit = NftStringLimit;
+    type KeyLimit = NftKeyLimit;
+    type ValueLimit = NftValueLimit;
+    type ApprovalsLimit = NftApprovalsLimit;
+    type ItemAttributesApprovalsLimit = NftItemAttributesApprovalsLimit;
+    type MaxTips = NftMaxTips;
+    type MaxDeadlineDuration = NftMaxDeadlineDuration;
+    type MaxAttributesPerCall = NftMaxAttributesPerCall;
+    type Features = NftFeatures;
+    type OffchainSignature = TestSignature;
+    type OffchainPublic = UintAuthorityId;
+    type WeightInfo = ();
+    #[cfg(feature = "runtime-benchmarks")]
+    type Helper = ();
+    type BlockNumberProvider = System;
+}
+
 parameter_types! {
     pub const SchedulerMaxScheduledPerBlock: u32 = 50;
     pub const SchedulerMaxWeight: frame::deps::frame_support::weights::Weight =
@@ -149,6 +205,7 @@ impl pallet_scheduler::Config for Test {
 
 parameter_types! {
     pub const PointAssetId: LocalAssetId = 1;
+    pub const CertificateCollectionId: NftCollectionId = 0;
 }
 
 impl pallet_tasks::Config for Test {
@@ -156,6 +213,9 @@ impl pallet_tasks::Config for Test {
 
     type Assets = Assets;
     type PointAssetId = PointAssetId;
+    type CertificateNfts = Nfts;
+    type CertificateCollectionId = CertificateCollectionId;
+    type CertificateItemConfig = pallet_nfts::ItemConfig;
 
     type AdminOrigin = frame_system::EnsureRoot<AccountId>;
 
@@ -171,6 +231,16 @@ impl pallet_tasks::Config for Test {
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
+    new_test_ext_with_certificate_collection(true)
+}
+
+pub fn new_test_ext_without_certificate_collection() -> sp_io::TestExternalities {
+    new_test_ext_with_certificate_collection(false)
+}
+
+fn new_test_ext_with_certificate_collection(
+    create_certificate_collection: bool,
+) -> sp_io::TestExternalities {
     let mut storage = frame_system::GenesisConfig::<Test>::default()
         .build_storage()
         .unwrap();
@@ -194,6 +264,14 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
             true,
             1,
         ));
+
+        if create_certificate_collection {
+            assert_ok!(Nfts::force_create(
+                RuntimeOrigin::root(),
+                1,
+                Default::default(),
+            ));
+        }
     });
 
     ext

@@ -1,5 +1,8 @@
 use crate::{
-    mock::{new_test_ext, Assets, RuntimeOrigin, Scheduler, System, Tasks, Test},
+    mock::{
+        new_test_ext, new_test_ext_without_certificate_collection, Assets, Nfts, RuntimeOrigin,
+        Scheduler, System, Tasks, Test,
+    },
     Error, TaskStatus,
 };
 
@@ -7,6 +10,7 @@ use frame::deps::{
     frame_support::{assert_noop, assert_ok, traits::OnInitialize},
     sp_runtime::DispatchError,
 };
+use polkadot_sdk::pallet_nfts;
 
 #[test]
 fn create_task_works() {
@@ -65,6 +69,54 @@ fn approve_task_mints_points() {
 
         assert_eq!(task.status, TaskStatus::Approved);
         assert_eq!(Assets::balance(1, &2), 100);
+        assert_eq!(pallet_nfts::Item::<Test>::get(0, 0).unwrap().owner, 2);
+    });
+}
+
+#[test]
+fn approve_task_fails_without_certificate_collection() {
+    new_test_ext_without_certificate_collection().execute_with(|| {
+        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10));
+        assert_ok!(Tasks::claim_task(RuntimeOrigin::signed(2), 0));
+        assert_ok!(Tasks::submit_task(RuntimeOrigin::signed(2), 0));
+
+        assert_noop!(
+            Tasks::approve_task(RuntimeOrigin::root(), 0),
+            pallet_nfts::Error::<Test>::UnknownCollection
+        );
+
+        let task = Tasks::tasks(0).unwrap();
+
+        assert_eq!(task.status, TaskStatus::Submitted);
+        assert_eq!(Assets::balance(1, &2), 0);
+        assert!(pallet_nfts::Item::<Test>::get(0, 0).is_none());
+    });
+}
+
+#[test]
+fn approve_task_fails_when_certificate_item_already_exists() {
+    new_test_ext().execute_with(|| {
+        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10));
+        assert_ok!(Tasks::claim_task(RuntimeOrigin::signed(2), 0));
+        assert_ok!(Tasks::submit_task(RuntimeOrigin::signed(2), 0));
+        assert_ok!(Nfts::force_mint(
+            RuntimeOrigin::root(),
+            0,
+            0,
+            3,
+            Default::default(),
+        ));
+
+        assert_noop!(
+            Tasks::approve_task(RuntimeOrigin::root(), 0),
+            pallet_nfts::Error::<Test>::AlreadyExists
+        );
+
+        let task = Tasks::tasks(0).unwrap();
+
+        assert_eq!(task.status, TaskStatus::Submitted);
+        assert_eq!(Assets::balance(1, &2), 0);
+        assert_eq!(pallet_nfts::Item::<Test>::get(0, 0).unwrap().owner, 3);
     });
 }
 
