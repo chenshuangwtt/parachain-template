@@ -25,6 +25,7 @@ pub trait WeightInfo {
 	fn submit_task() -> Weight;
 	fn approve_task() -> Weight;
 	fn reject_task() -> Weight;
+	fn close_task() -> Weight;
 }
 
 /// Weights for `pallet_tasks`.
@@ -73,6 +74,14 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
+
+	fn close_task() -> Weight {
+		Weight::from_parts(34_560_000, 0)
+			.saturating_add(Weight::from_parts(0, 3542))
+			.saturating_add(T::DbWeight::get().reads(1))
+			.saturating_add(T::DbWeight::get().writes(1))
+	}		
+
 }
 
 // For backwards compatibility and tests.
@@ -107,6 +116,13 @@ impl WeightInfo for () {
 
 	fn reject_task() -> Weight {
 		Weight::from_parts(29_880_000, 0)
+			.saturating_add(Weight::from_parts(0, 3542))
+			.saturating_add(RocksDbWeight::get().reads(1))
+			.saturating_add(RocksDbWeight::get().writes(1))
+	}
+
+	fn close_task() -> Weight {
+		Weight::from_parts(34_560_000, 0)
 			.saturating_add(Weight::from_parts(0, 3542))
 			.saturating_add(RocksDbWeight::get().reads(1))
 			.saturating_add(RocksDbWeight::get().writes(1))

@@ -7,7 +7,7 @@ license = "MIT-0"
 publish = false
 
 [dependencies]
-codec = { package = "parity-scale-codec", workspace = true, default-features = false, features = ["derive", "max-encoded-len"] }
+codec = { workspace = true, default-features = false, features = ["derive", "max-encoded-len"] }
 scale-info = { workspace = true, default-features = false, features = ["derive"] }
 
 frame = { workspace = true, features = ["runtime"], default-features = false }
@@ -22,6 +22,7 @@ polkadot-sdk = { workspace = true, default-features = false, features = [
     "runtime",
     "pallet-assets",
     "pallet-balances",
+    "pallet-scheduler",
 ] }
 
 

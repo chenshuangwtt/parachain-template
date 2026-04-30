@@ -3,9 +3,11 @@
 //! 该模块实现了一个去中心化的任务管理系统，支持任务的创建、认领、提交、审批与拒绝。
 //! 任务完成后，审批人可以向完成者发放资产（Point）作为奖励。
 
-#![cfg_attr(not(feature = "std"), no_std)]   // 在 std 特性未启用时使用 no_std 环境
+#![cfg_attr(not(feature = "std"), no_std)] // 在 std 特性未启用时使用 no_std 环境
 
-pub use pallet::*;  // 公开整个 pallet 模块以便外部使用
+extern crate alloc;
+
+pub use pallet::*; // 公开整个 pallet 模块以便外部使用
 
 pub mod weights;
 
@@ -15,50 +17,37 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-
 use crate::weights::WeightInfo;
 
-use frame::prelude::*;   // 导入 FRAME 预定义基础类型与宏
+use alloc::vec::Vec;
+use frame::prelude::*; // 导入 FRAME 预定义基础类型与宏
+use frame::traits::schedule::{DispatchTime, Named as ScheduleNamed};
 use frame::traits::{
-    tokens::fungibles::{Inspect, Mutate},  // 资产检查与修改 trait
+    tokens::fungibles::{Inspect, Mutate}, // 资产检查与修改 trait
     EnsureOrigin,                         // 用于校验调用来源
 };
 
 pub trait IdentityVerifier<AccountId> {
-	fn is_verified(who: &AccountId) -> bool;
+    fn is_verified(who: &AccountId) -> bool;
 }
 
-#[frame::pallet]  // 声明这是一个 pallet 模块
+#[frame::pallet] // 声明这是一个 pallet 模块
 pub mod pallet {
-    use super::*;   // 引入上层所有导入
+    use super::*; // 引入上层所有导入
 
     /// 任务 ID 类型
     pub type TaskId = u32;
 
     /// 资产 ID 类型，从 Config 中关联的 Assets 类型推导得到
     pub type AssetIdOf<T> =
-        <<T as Config>::Assets as Inspect<
-            <T as frame_system::Config>::AccountId,
-        >>::AssetId;
+        <<T as Config>::Assets as Inspect<<T as frame_system::Config>::AccountId>>::AssetId;
 
     /// 余额类型，从 Config 中关联的 Assets 类型推导得到
     pub type BalanceOf<T> =
-        <<T as Config>::Assets as Inspect<
-            <T as frame_system::Config>::AccountId,
-        >>::Balance;
+        <<T as Config>::Assets as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
 
     /// 任务状态枚举
-    #[derive(
-        Encode,
-        Decode,
-        Clone,
-        Copy,
-        PartialEq,
-        Eq,
-        RuntimeDebug,
-        TypeInfo,
-        MaxEncodedLen,
-    )]
+    #[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
     pub enum TaskStatus {
         /// 初始状态：未认领，等待被接取
         Open,
@@ -70,26 +59,19 @@ pub mod pallet {
         Approved,
         /// 管理员已拒绝
         Rejected,
+        Closed,
     }
 
     /// 任务数据结构
-    #[derive(
-        Encode,
-        Decode,
-        Clone,
-        PartialEq,
-        Eq,
-        RuntimeDebug,
-        TypeInfo,
-        MaxEncodedLen,
-    )]
-    pub struct Task<AccountId, Balance> {
+    #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
+    pub struct Task<AccountId, Balance, BlockNumber> {
         /// 任务创建者
         pub creator: AccountId,
         /// 任务接取者（认领后填写）
         pub assignee: Option<AccountId>,
         /// 完成后可获得的基础奖励
         pub reward: Balance,
+        pub deadline: BlockNumber,
         /// 当前任务状态
         pub status: TaskStatus,
     }
@@ -98,8 +80,7 @@ pub mod pallet {
     #[pallet::config]
     pub trait Config: frame_system::Config {
         /// 运行时事件，需要包含本模块的事件
-        type RuntimeEvent: From<Event<Self>>
-            + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+        type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
         /// 可操作的资产系统（需要支持 Inspect 和 Mutate）
         type Assets: Inspect<Self::AccountId> + Mutate<Self::AccountId>;
@@ -113,6 +94,18 @@ pub mod pallet {
         type IdentityVerifier: crate::IdentityVerifier<Self::AccountId>;
 
         type WeightInfo: weights::WeightInfo;
+
+        type CloseOrigin: EnsureOrigin<Self::RuntimeOrigin>;
+
+        type ScheduleOrigin: From<frame_system::RawOrigin<Self::AccountId>>;
+
+        type Scheduler: ScheduleNamed<
+            BlockNumberFor<Self>,
+            Self::TaskRuntimeCall,
+            Self::ScheduleOrigin,
+        >;
+
+        type TaskRuntimeCall: From<Call<Self>>;
     }
 
     /// Pallet 主体结构体
@@ -123,7 +116,7 @@ pub mod pallet {
 
     /// 自增任务 ID 计数器
     #[pallet::storage]
-    #[pallet::getter(fn next_task_id)]   // 生成可读性好的 getter 方法
+    #[pallet::getter(fn next_task_id)] // 生成可读性好的 getter 方法
     pub type NextTaskId<T> = StorageValue<_, TaskId, ValueQuery>;
 
     /// 任务映射表，从 TaskId 到 Task 详情
@@ -131,10 +124,10 @@ pub mod pallet {
     #[pallet::getter(fn tasks)]
     pub type Tasks<T: Config> = StorageMap<
         _,
-        Blake2_128Concat,                    // 使用哈希作为 key 的存储方案
+        Blake2_128Concat, // 使用哈希作为 key 的存储方案
         TaskId,
-        Task<T::AccountId, BalanceOf<T>>,
-        OptionQuery,                         // 可能为空
+        Task<T::AccountId, BalanceOf<T>, BlockNumberFor<T>>,
+        OptionQuery, // 可能为空
     >;
 
     // ------- 事件 -------
@@ -169,6 +162,9 @@ pub mod pallet {
         TaskRejected {
             task_id: TaskId,
         },
+        TaskClosed {
+            task_id: TaskId,
+        },
     }
 
     // ------- 错误 -------
@@ -192,8 +188,11 @@ pub mod pallet {
         MissingAssignee,
         /// 任务 ID 溢出（超过 u32 最大值）
         TaskIdOverflow,
-        
+
         IdentityNotVerified,
+        InvalidDeadline,
+        TaskAlreadyFinalized,
+        ScheduleTaskFailed,
     }
 
     // ------- 公开调用函数 -------
@@ -208,9 +207,13 @@ pub mod pallet {
         pub fn create_task(
             origin: OriginFor<T>,
             reward: BalanceOf<T>,
+            deadline: BlockNumberFor<T>,
         ) -> DispatchResult {
             // 确保调用者已签名，并获取其 AccountId
             let creator = ensure_signed(origin)?;
+
+            let now = frame_system::Pallet::<T>::block_number();
+            ensure!(deadline > now, Error::<T>::InvalidDeadline);
 
             // 获取下一个可用的任务 ID
             let task_id = NextTaskId::<T>::get();
@@ -220,16 +223,30 @@ pub mod pallet {
                 creator: creator.clone(),
                 assignee: None,
                 reward,
+                deadline,
                 status: TaskStatus::Open,
             };
 
             // 将任务存入存储
             Tasks::<T>::insert(task_id, task);
 
+            let close_call: <T as Config>::TaskRuntimeCall =
+                Call::<T>::close_task { task_id }.into();
+
+            let schedule_name = Self::close_schedule_name(task_id);
+
+            T::Scheduler::schedule_named(
+                schedule_name,
+                DispatchTime::At(deadline),
+                None,
+                63,
+                T::ScheduleOrigin::from(frame_system::RawOrigin::Root),
+                close_call,
+            )
+            .map_err(|_| Error::<T>::ScheduleTaskFailed)?;
+
             // 任务 ID 自增，并防止溢出
-            let next_id = task_id
-                .checked_add(1)
-                .ok_or(Error::<T>::TaskIdOverflow)?;
+            let next_id = task_id.checked_add(1).ok_or(Error::<T>::TaskIdOverflow)?;
             NextTaskId::<T>::put(next_id);
 
             // 抛出事件
@@ -247,10 +264,7 @@ pub mod pallet {
         /// 参数: `task_id` - 要认领的任务 ID
         #[pallet::call_index(1)]
         #[pallet::weight(T::WeightInfo::claim_task())]
-        pub fn claim_task(
-            origin: OriginFor<T>,
-            task_id: TaskId,
-        ) -> DispatchResult {
+        pub fn claim_task(origin: OriginFor<T>, task_id: TaskId) -> DispatchResult {
             let who = ensure_signed(origin)?;
 
             ensure!(
@@ -260,21 +274,13 @@ pub mod pallet {
 
             // 尝试修改指定任务，闭包内进行状态检查
             Tasks::<T>::try_mutate(task_id, |maybe_task| -> DispatchResult {
-                let task = maybe_task
-                    .as_mut()
-                    .ok_or(Error::<T>::TaskNotFound)?;
+                let task = maybe_task.as_mut().ok_or(Error::<T>::TaskNotFound)?;
 
                 // 只有 Open 状态的任务才能被认领
-                ensure!(
-                    task.status == TaskStatus::Open,
-                    Error::<T>::TaskNotOpen
-                );
+                ensure!(task.status == TaskStatus::Open, Error::<T>::TaskNotOpen);
 
                 // 尚未有人认领（assignee 为 None）
-                ensure!(
-                    task.assignee.is_none(),
-                    Error::<T>::AlreadyClaimed
-                );
+                ensure!(task.assignee.is_none(), Error::<T>::AlreadyClaimed);
 
                 // 绑定认领者并更新状态
                 task.assignee = Some(who.clone());
@@ -296,16 +302,11 @@ pub mod pallet {
         /// 仅允许认领者本人调用
         #[pallet::call_index(2)]
         #[pallet::weight(T::WeightInfo::submit_task())]
-        pub fn submit_task(
-            origin: OriginFor<T>,
-            task_id: TaskId,
-        ) -> DispatchResult {
+        pub fn submit_task(origin: OriginFor<T>, task_id: TaskId) -> DispatchResult {
             let who = ensure_signed(origin)?;
 
             Tasks::<T>::try_mutate(task_id, |maybe_task| -> DispatchResult {
-                let task = maybe_task
-                    .as_mut()
-                    .ok_or(Error::<T>::TaskNotFound)?;
+                let task = maybe_task.as_mut().ok_or(Error::<T>::TaskNotFound)?;
 
                 // 只有 Claimed 状态的任务才能提交
                 ensure!(
@@ -314,10 +315,7 @@ pub mod pallet {
                 );
 
                 // 获取存有的认领者，不存在则报错
-                let assignee = task
-                    .assignee
-                    .as_ref()
-                    .ok_or(Error::<T>::MissingAssignee)?;
+                let assignee = task.assignee.as_ref().ok_or(Error::<T>::MissingAssignee)?;
 
                 // 只有认领者本人才能提交
                 ensure!(assignee == &who, Error::<T>::NotAssignee);
@@ -341,45 +339,32 @@ pub mod pallet {
         /// 批准后，会向认领者铸造对应奖励资产。
         #[pallet::call_index(3)]
         #[pallet::weight(T::WeightInfo::approve_task())]
-        pub fn approve_task(
-            origin: OriginFor<T>,
-            task_id: TaskId,
-        ) -> DispatchResult {
+        pub fn approve_task(origin: OriginFor<T>, task_id: TaskId) -> DispatchResult {
             // 仅允许管理员调用
             T::AdminOrigin::ensure_origin(origin)?;
 
             // 修改任务并取出认领者和奖励额
-            let (assignee, reward) =
-                Tasks::<T>::try_mutate(task_id, |maybe_task| {
-                    let task = maybe_task
-                        .as_mut()
-                        .ok_or(Error::<T>::TaskNotFound)?;
+            let (assignee, reward) = Tasks::<T>::try_mutate(task_id, |maybe_task| {
+                let task = maybe_task.as_mut().ok_or(Error::<T>::TaskNotFound)?;
 
-                    // 只有 Submitted 状态的任务可以被审批
-                    ensure!(
-                        task.status == TaskStatus::Submitted,
-                        Error::<T>::TaskNotSubmitted
-                    );
+                // 只有 Submitted 状态的任务可以被审批
+                ensure!(
+                    task.status == TaskStatus::Submitted,
+                    Error::<T>::TaskNotSubmitted
+                );
 
-                    let assignee = task
-                        .assignee
-                        .clone()
-                        .ok_or(Error::<T>::MissingAssignee)?;
+                let assignee = task.assignee.clone().ok_or(Error::<T>::MissingAssignee)?;
 
-                    let reward = task.reward;
+                let reward = task.reward;
 
-                    // 将状态置为 Approved
-                    task.status = TaskStatus::Approved;
+                // 将状态置为 Approved
+                task.status = TaskStatus::Approved;
 
-                    Ok::<_, DispatchError>((assignee, reward))
-                })?;
+                Ok::<_, DispatchError>((assignee, reward))
+            })?;
 
             // 向认领者铸造奖励资产
-            T::Assets::mint_into(
-                T::PointAssetId::get(),
-                &assignee,
-                reward,
-            )?;
+            T::Assets::mint_into(T::PointAssetId::get(), &assignee, reward)?;
 
             Self::deposit_event(Event::TaskApproved {
                 task_id,
@@ -395,16 +380,11 @@ pub mod pallet {
         /// 任务状态变为 Rejected，不发放奖励。
         #[pallet::call_index(4)]
         #[pallet::weight(T::WeightInfo::reject_task())]
-        pub fn reject_task(
-            origin: OriginFor<T>,
-            task_id: TaskId,
-        ) -> DispatchResult {
+        pub fn reject_task(origin: OriginFor<T>, task_id: TaskId) -> DispatchResult {
             T::AdminOrigin::ensure_origin(origin)?;
 
             Tasks::<T>::try_mutate(task_id, |maybe_task| -> DispatchResult {
-                let task = maybe_task
-                    .as_mut()
-                    .ok_or(Error::<T>::TaskNotFound)?;
+                let task = maybe_task.as_mut().ok_or(Error::<T>::TaskNotFound)?;
 
                 // 同样要求状态为 Submitted
                 ensure!(
@@ -420,6 +400,38 @@ pub mod pallet {
             Self::deposit_event(Event::TaskRejected { task_id });
 
             Ok(())
+        }
+
+        #[pallet::call_index(5)]
+        #[pallet::weight(T::WeightInfo::close_task())]
+        pub fn close_task(origin: OriginFor<T>, task_id: TaskId) -> DispatchResult {
+            T::CloseOrigin::ensure_origin(origin)?;
+
+            Tasks::<T>::try_mutate(task_id, |maybe_task| -> DispatchResult {
+                let task = maybe_task.as_mut().ok_or(Error::<T>::TaskNotFound)?;
+
+                ensure!(
+                    !matches!(
+                        task.status,
+                        TaskStatus::Approved | TaskStatus::Rejected | TaskStatus::Closed
+                    ),
+                    Error::<T>::TaskAlreadyFinalized
+                );
+
+                task.status = TaskStatus::Closed;
+
+                Ok(())
+            })?;
+
+            Self::deposit_event(Event::TaskClosed { task_id });
+
+            Ok(())
+        }
+    }
+
+    impl<T: Config> Pallet<T> {
+        fn close_schedule_name(task_id: TaskId) -> Vec<u8> {
+            (b"tasks-close", task_id).encode()
         }
     }
 }
