@@ -164,7 +164,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: alloc::borrow::Cow::Borrowed("parachain-template-runtime"),
     impl_name: alloc::borrow::Cow::Borrowed("parachain-template-runtime"),
     authoring_version: 1,
-    spec_version: 3,
+    spec_version: 4,
     impl_version: 0,
     apis: apis::RUNTIME_API_VERSIONS,
     transaction_version: 1,
@@ -319,6 +319,9 @@ mod runtime {
 
     #[runtime::pallet_index(38)]
     pub type Scheduler = pallet_scheduler;
+
+    #[runtime::pallet_index(39)]
+    pub type Nfts = pallet_nfts;
 
     // Template
     #[runtime::pallet_index(50)]

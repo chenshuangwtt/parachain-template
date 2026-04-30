@@ -260,6 +260,80 @@ impl pallet_tasks::Config for Runtime {
     type WeightInfo = pallet_tasks::weights::SubstrateWeight<Runtime>;
 }
 
+
+pub type NftCollectionId = u32;
+pub type NftItemId = u32;
+
+parameter_types! {
+    pub const NftCollectionDeposit: Balance = UNIT;
+    pub const NftItemDeposit: Balance = UNIT;
+    pub const NftMetadataDepositBase: Balance = CENTS;
+    pub const NftAttributeDepositBase: Balance = CENTS;
+    pub const NftDepositPerByte: Balance = MICRO_UNIT;
+
+    pub const NftStringLimit: u32 = 256;
+    pub const NftKeyLimit: u32 = 64;
+    pub const NftValueLimit: u32 = 256;
+
+    pub const NftApprovalsLimit: u32 = 20;
+    pub const NftItemAttributesApprovalsLimit: u32 = 20;
+    pub const NftMaxTips: u32 = 10;
+    pub const NftMaxDeadlineDuration: BlockNumber = 7 * 24 * HOURS;
+    pub const NftMaxAttributesPerCall: u32 = 10;
+
+}
+
+pub struct NftFeatures;
+
+impl frame_support::traits::Get<pallet_nfts::PalletFeatures> for NftFeatures {
+    fn get() -> pallet_nfts::PalletFeatures {
+        pallet_nfts::PalletFeatures::all_enabled()
+    }
+}
+
+impl pallet_nfts::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+
+    type CollectionId = NftCollectionId;
+    type ItemId = NftItemId;
+
+    type Currency = Balances;
+
+    type ForceOrigin = frame_system::EnsureRoot<AccountId>;
+    type CreateOrigin = frame_system::EnsureSigned<AccountId>;
+
+    type Locker = ();
+
+    type CollectionDeposit = NftCollectionDeposit;
+    type ItemDeposit = NftItemDeposit;
+    type MetadataDepositBase = NftMetadataDepositBase;
+    type AttributeDepositBase = NftAttributeDepositBase;
+    type DepositPerByte = NftDepositPerByte;
+
+    type StringLimit = NftStringLimit;
+    type KeyLimit = NftKeyLimit;
+    type ValueLimit = NftValueLimit;
+
+    type ApprovalsLimit = NftApprovalsLimit;
+    type ItemAttributesApprovalsLimit = NftItemAttributesApprovalsLimit;
+    type MaxTips = NftMaxTips;
+    type MaxDeadlineDuration = NftMaxDeadlineDuration;
+    type MaxAttributesPerCall = NftMaxAttributesPerCall;
+
+    type Features = NftFeatures;
+
+    type OffchainSignature = sp_runtime::MultiSignature;
+    type OffchainPublic = sp_runtime::MultiSigner;
+
+    #[cfg(feature = "runtime-benchmarks")]
+    type Helper = ();
+
+    type WeightInfo = pallet_nfts::weights::SubstrateWeight<Runtime>;
+
+    type BlockNumberProvider = System;
+}
+
+
 parameter_types! {
     pub const SchedulerMaxScheduledPerBlock: u32 = 50;
 }
