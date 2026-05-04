@@ -15,7 +15,7 @@ use polkadot_sdk::pallet_nfts;
 #[test]
 fn create_task_works() {
     new_test_ext().execute_with(|| {
-        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10));
+        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10, true));
 
         let task = Tasks::tasks(0).unwrap();
 
@@ -23,15 +23,65 @@ fn create_task_works() {
         assert_eq!(task.assignee, None);
         assert_eq!(task.reward, 100);
         assert_eq!(task.deadline, 10);
+        assert_eq!(task.certificate_collection, Some(0));
         assert_eq!(task.status, TaskStatus::Open);
         assert_eq!(Tasks::next_task_id(), 1);
     });
 }
 
 #[test]
+fn certificate_collection_id_defaults_to_runtime_value() {
+    new_test_ext().execute_with(|| {
+        assert_eq!(Tasks::certificate_collection_id(), 0);
+    });
+}
+
+#[test]
+fn admin_can_set_certificate_collection_id() {
+    new_test_ext().execute_with(|| {
+        assert_ok!(Tasks::set_certificate_collection_id(RuntimeOrigin::root(), 1));
+
+        assert_eq!(Tasks::certificate_collection_id(), 1);
+    });
+}
+
+#[test]
+fn non_root_cannot_set_certificate_collection_id() {
+    new_test_ext().execute_with(|| {
+        assert_noop!(
+            Tasks::set_certificate_collection_id(RuntimeOrigin::signed(1), 1),
+            DispatchError::BadOrigin
+        );
+    });
+}
+
+#[test]
+fn create_task_certificate_enabled_snapshots_current_collection() {
+    new_test_ext().execute_with(|| {
+        assert_ok!(Tasks::set_certificate_collection_id(RuntimeOrigin::root(), 1));
+        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10, true));
+
+        let task = Tasks::tasks(0).unwrap();
+
+        assert_eq!(task.certificate_collection, Some(1));
+    });
+}
+
+#[test]
+fn create_task_certificate_disabled_stores_no_collection() {
+    new_test_ext().execute_with(|| {
+        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10, false));
+
+        let task = Tasks::tasks(0).unwrap();
+
+        assert_eq!(task.certificate_collection, None);
+    });
+}
+
+#[test]
 fn claim_task_works() {
     new_test_ext().execute_with(|| {
-        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10));
+        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10, true));
         assert_ok!(Tasks::claim_task(RuntimeOrigin::signed(2), 0));
 
         let task = Tasks::tasks(0).unwrap();
@@ -44,7 +94,7 @@ fn claim_task_works() {
 #[test]
 fn submit_task_works() {
     new_test_ext().execute_with(|| {
-        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10));
+        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10, true));
         assert_ok!(Tasks::claim_task(RuntimeOrigin::signed(2), 0));
         assert_ok!(Tasks::submit_task(RuntimeOrigin::signed(2), 0));
 
@@ -57,7 +107,7 @@ fn submit_task_works() {
 #[test]
 fn approve_task_mints_points() {
     new_test_ext().execute_with(|| {
-        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10));
+        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10, true));
         assert_ok!(Tasks::claim_task(RuntimeOrigin::signed(2), 0));
         assert_ok!(Tasks::submit_task(RuntimeOrigin::signed(2), 0));
 
@@ -74,9 +124,62 @@ fn approve_task_mints_points() {
 }
 
 #[test]
+fn approve_task_uses_dynamic_certificate_collection() {
+    new_test_ext().execute_with(|| {
+        assert_ok!(Nfts::force_create(
+            RuntimeOrigin::root(),
+            1,
+            Default::default(),
+        ));
+        assert_ok!(Tasks::set_certificate_collection_id(RuntimeOrigin::root(), 1));
+        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10, true));
+        assert_ok!(Tasks::claim_task(RuntimeOrigin::signed(2), 0));
+        assert_ok!(Tasks::submit_task(RuntimeOrigin::signed(2), 0));
+
+        assert_ok!(Tasks::approve_task(RuntimeOrigin::root(), 0));
+
+        assert_eq!(Assets::balance(1, &2), 100);
+        assert_eq!(pallet_nfts::Item::<Test>::get(1, 0).unwrap().owner, 2);
+        assert!(pallet_nfts::Item::<Test>::get(0, 0).is_none());
+    });
+}
+
+#[test]
+fn approve_task_uses_task_collection_snapshot() {
+    new_test_ext().execute_with(|| {
+        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10, true));
+        assert_ok!(Tasks::set_certificate_collection_id(RuntimeOrigin::root(), 1));
+        assert_ok!(Tasks::claim_task(RuntimeOrigin::signed(2), 0));
+        assert_ok!(Tasks::submit_task(RuntimeOrigin::signed(2), 0));
+
+        assert_ok!(Tasks::approve_task(RuntimeOrigin::root(), 0));
+
+        assert_eq!(pallet_nfts::Item::<Test>::get(0, 0).unwrap().owner, 2);
+        assert!(pallet_nfts::Item::<Test>::get(1, 0).is_none());
+    });
+}
+
+#[test]
+fn approve_task_without_certificate_only_mints_points() {
+    new_test_ext_without_certificate_collection().execute_with(|| {
+        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10, false));
+        assert_ok!(Tasks::claim_task(RuntimeOrigin::signed(2), 0));
+        assert_ok!(Tasks::submit_task(RuntimeOrigin::signed(2), 0));
+
+        assert_ok!(Tasks::approve_task(RuntimeOrigin::root(), 0));
+
+        let task = Tasks::tasks(0).unwrap();
+
+        assert_eq!(task.status, TaskStatus::Approved);
+        assert_eq!(Assets::balance(1, &2), 100);
+        assert!(pallet_nfts::Item::<Test>::get(0, 0).is_none());
+    });
+}
+
+#[test]
 fn approve_task_fails_without_certificate_collection() {
     new_test_ext_without_certificate_collection().execute_with(|| {
-        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10));
+        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10, true));
         assert_ok!(Tasks::claim_task(RuntimeOrigin::signed(2), 0));
         assert_ok!(Tasks::submit_task(RuntimeOrigin::signed(2), 0));
 
@@ -96,7 +199,7 @@ fn approve_task_fails_without_certificate_collection() {
 #[test]
 fn approve_task_fails_when_certificate_item_already_exists() {
     new_test_ext().execute_with(|| {
-        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10));
+        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10, true));
         assert_ok!(Tasks::claim_task(RuntimeOrigin::signed(2), 0));
         assert_ok!(Tasks::submit_task(RuntimeOrigin::signed(2), 0));
         assert_ok!(Nfts::force_mint(
@@ -123,7 +226,7 @@ fn approve_task_fails_when_certificate_item_already_exists() {
 #[test]
 fn reject_task_works() {
     new_test_ext().execute_with(|| {
-        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10));
+        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10, true));
         assert_ok!(Tasks::claim_task(RuntimeOrigin::signed(2), 0));
         assert_ok!(Tasks::submit_task(RuntimeOrigin::signed(2), 0));
 
@@ -149,7 +252,7 @@ fn cannot_claim_missing_task() {
 #[test]
 fn cannot_claim_claimed_task() {
     new_test_ext().execute_with(|| {
-        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10));
+        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10, true));
         assert_ok!(Tasks::claim_task(RuntimeOrigin::signed(2), 0));
 
         assert_noop!(
@@ -172,7 +275,7 @@ fn cannot_submit_missing_task() {
 #[test]
 fn cannot_submit_unclaimed_task() {
     new_test_ext().execute_with(|| {
-        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10));
+        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10, true));
 
         assert_noop!(
             Tasks::submit_task(RuntimeOrigin::signed(2), 0),
@@ -184,7 +287,7 @@ fn cannot_submit_unclaimed_task() {
 #[test]
 fn non_assignee_cannot_submit() {
     new_test_ext().execute_with(|| {
-        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10));
+        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10, true));
         assert_ok!(Tasks::claim_task(RuntimeOrigin::signed(2), 0));
 
         assert_noop!(
@@ -197,7 +300,7 @@ fn non_assignee_cannot_submit() {
 #[test]
 fn non_root_cannot_approve() {
     new_test_ext().execute_with(|| {
-        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10));
+        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10, true));
         assert_ok!(Tasks::claim_task(RuntimeOrigin::signed(2), 0));
         assert_ok!(Tasks::submit_task(RuntimeOrigin::signed(2), 0));
 
@@ -211,7 +314,7 @@ fn non_root_cannot_approve() {
 #[test]
 fn cannot_approve_before_submit() {
     new_test_ext().execute_with(|| {
-        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10));
+        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10, true));
         assert_ok!(Tasks::claim_task(RuntimeOrigin::signed(2), 0));
 
         assert_noop!(
@@ -234,7 +337,7 @@ fn cannot_approve_missing_task() {
 #[test]
 fn non_root_cannot_reject() {
     new_test_ext().execute_with(|| {
-        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10));
+        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10, true));
         assert_ok!(Tasks::claim_task(RuntimeOrigin::signed(2), 0));
         assert_ok!(Tasks::submit_task(RuntimeOrigin::signed(2), 0));
 
@@ -248,7 +351,7 @@ fn non_root_cannot_reject() {
 #[test]
 fn cannot_reject_before_submit() {
     new_test_ext().execute_with(|| {
-        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10));
+        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10, true));
         assert_ok!(Tasks::claim_task(RuntimeOrigin::signed(2), 0));
 
         assert_noop!(
@@ -261,7 +364,7 @@ fn cannot_reject_before_submit() {
 #[test]
 fn unverified_user_cannot_claim_task() {
     new_test_ext().execute_with(|| {
-        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10));
+        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 10, true));
 
         assert_noop!(
             Tasks::claim_task(RuntimeOrigin::signed(3), 0),
@@ -273,7 +376,7 @@ fn unverified_user_cannot_claim_task() {
 #[test]
 fn scheduler_closes_task_at_deadline() {
     new_test_ext().execute_with(|| {
-        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 3));
+        assert_ok!(Tasks::create_task(RuntimeOrigin::signed(1), 100, 3, true));
 
         assert_eq!(Tasks::tasks(0).unwrap().status, TaskStatus::Open);
 

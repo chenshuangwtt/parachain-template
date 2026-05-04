@@ -221,7 +221,7 @@ pub type LocalAssetBalance = u128;
 
 parameter_types! {
     pub const PointAssetId: LocalAssetId = 1;
-    pub const CertificateCollectionId: u32 = 0;
+    pub const DefaultCertificateCollectionId: u32 = 0;
 }
 
 pub struct IdentityJudgementVerifier;
@@ -247,8 +247,9 @@ impl pallet_tasks::Config for Runtime {
 
     type Assets = Assets;
     type PointAssetId = PointAssetId;
+    type CertificateCollectionId = NftCollectionId;
     type CertificateNfts = Nfts;
-    type CertificateCollectionId = CertificateCollectionId;
+    type DefaultCertificateCollectionId = DefaultCertificateCollectionId;
     type CertificateItemConfig = pallet_nfts::ItemConfig;
 
     type AdminOrigin = pallet_collective::EnsureProportionAtLeast<AccountId, (), 2, 3>;

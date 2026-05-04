@@ -205,7 +205,7 @@ impl pallet_scheduler::Config for Test {
 
 parameter_types! {
     pub const PointAssetId: LocalAssetId = 1;
-    pub const CertificateCollectionId: NftCollectionId = 0;
+    pub const DefaultCertificateCollectionId: NftCollectionId = 0;
 }
 
 impl pallet_tasks::Config for Test {
@@ -213,8 +213,9 @@ impl pallet_tasks::Config for Test {
 
     type Assets = Assets;
     type PointAssetId = PointAssetId;
+    type CertificateCollectionId = NftCollectionId;
     type CertificateNfts = Nfts;
-    type CertificateCollectionId = CertificateCollectionId;
+    type DefaultCertificateCollectionId = DefaultCertificateCollectionId;
     type CertificateItemConfig = pallet_nfts::ItemConfig;
 
     type AdminOrigin = frame_system::EnsureRoot<AccountId>;

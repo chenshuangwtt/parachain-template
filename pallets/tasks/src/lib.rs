@@ -49,6 +49,11 @@ pub mod pallet {
     pub type BalanceOf<T> =
         <<T as Config>::Assets as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
 
+    pub type CollectionIdOf<T> =
+        <<T as Config>::CertificateNfts as frame::traits::tokens::nonfungibles_v2::Inspect<
+            <T as frame_system::Config>::AccountId,
+        >>::CollectionId;
+
     /// 任务状态枚举
     #[derive(Encode, Decode, Clone, Copy, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
     pub enum TaskStatus {
@@ -67,7 +72,7 @@ pub mod pallet {
 
     /// 任务数据结构
     #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-    pub struct Task<AccountId, Balance, BlockNumber> {
+    pub struct Task<AccountId, Balance, BlockNumber, CollectionId> {
         /// 任务创建者
         pub creator: AccountId,
         /// 任务接取者（认领后填写）
@@ -75,6 +80,7 @@ pub mod pallet {
         /// 完成后可获得的基础奖励
         pub reward: Balance,
         pub deadline: BlockNumber,
+        pub certificate_collection: Option<CollectionId>,
         /// 当前任务状态
         pub status: TaskStatus,
     }
@@ -91,17 +97,16 @@ pub mod pallet {
         /// 奖励发放时使用的具体资产 ID（提供者）
         type PointAssetId: Get<AssetIdOf<Self>>;
 
+        type CertificateCollectionId: Parameter + MaxEncodedLen + Copy;
+
         type CertificateNfts: NftMutate<
             Self::AccountId,
             Self::CertificateItemConfig,
+            CollectionId = Self::CertificateCollectionId,
             ItemId = TaskId,
         >;
 
-        type CertificateCollectionId: Get<
-            <Self::CertificateNfts as frame::traits::tokens::nonfungibles_v2::Inspect<
-                Self::AccountId,
-            >>::CollectionId,
-        >;
+        type DefaultCertificateCollectionId: Get<CollectionIdOf<Self>>;
 
         type CertificateItemConfig: Default;
 
@@ -136,6 +141,11 @@ pub mod pallet {
     #[pallet::getter(fn next_task_id)] // 生成可读性好的 getter 方法
     pub type NextTaskId<T> = StorageValue<_, TaskId, ValueQuery>;
 
+    #[pallet::storage]
+    #[pallet::getter(fn certificate_collection_id)]
+    pub type CertificateCollectionId<T: Config> =
+        StorageValue<_, CollectionIdOf<T>, ValueQuery, T::DefaultCertificateCollectionId>;
+
     /// 任务映射表，从 TaskId 到 Task 详情
     #[pallet::storage]
     #[pallet::getter(fn tasks)]
@@ -143,7 +153,7 @@ pub mod pallet {
         _,
         Blake2_128Concat, // 使用哈希作为 key 的存储方案
         TaskId,
-        Task<T::AccountId, BalanceOf<T>, BlockNumberFor<T>>,
+        Task<T::AccountId, BalanceOf<T>, BlockNumberFor<T>, CollectionIdOf<T>>,
         OptionQuery, // 可能为空
     >;
 
@@ -181,6 +191,9 @@ pub mod pallet {
         },
         TaskClosed {
             task_id: TaskId,
+        },
+        CertificateCollectionIdSet {
+            collection_id: CollectionIdOf<T>,
         },
     }
 
@@ -225,6 +238,7 @@ pub mod pallet {
             origin: OriginFor<T>,
             reward: BalanceOf<T>,
             deadline: BlockNumberFor<T>,
+            certificate_enabled: bool,
         ) -> DispatchResult {
             // 确保调用者已签名，并获取其 AccountId
             let creator = ensure_signed(origin)?;
@@ -241,6 +255,7 @@ pub mod pallet {
                 assignee: None,
                 reward,
                 deadline,
+                certificate_collection: certificate_enabled.then(CertificateCollectionId::<T>::get),
                 status: TaskStatus::Open,
             };
 
@@ -423,11 +438,26 @@ pub mod pallet {
 
             Ok(())
         }
+
+        #[pallet::call_index(6)]
+        #[pallet::weight(T::WeightInfo::set_certificate_collection_id())]
+        pub fn set_certificate_collection_id(
+            origin: OriginFor<T>,
+            collection_id: CollectionIdOf<T>,
+        ) -> DispatchResult {
+            T::AdminOrigin::ensure_origin(origin)?;
+
+            CertificateCollectionId::<T>::put(collection_id);
+
+            Self::deposit_event(Event::CertificateCollectionIdSet { collection_id });
+
+            Ok(())
+        }
     }
 
     impl<T: Config> Pallet<T> {
         fn do_approve_task(task_id: TaskId) -> DispatchResult {
-            let (assignee, reward) = {
+            let (assignee, reward, certificate_collection) = {
                 let task = Tasks::<T>::get(task_id).ok_or(Error::<T>::TaskNotFound)?;
 
                 // 只有 Submitted 状态的任务可以被审批
@@ -438,20 +468,21 @@ pub mod pallet {
 
                 let assignee = task.assignee.clone().ok_or(Error::<T>::MissingAssignee)?;
 
-                (assignee, task.reward)
+                (assignee, task.reward, task.certificate_collection)
             };
 
             // 向认领者铸造奖励资产
             T::Assets::mint_into(T::PointAssetId::get(), &assignee, reward)?;
 
-            let collection_id = T::CertificateCollectionId::get();
-            T::CertificateNfts::mint_into(
-                &collection_id,
-                &task_id,
-                &assignee,
-                &T::CertificateItemConfig::default(),
-                true,
-            )?;
+            if let Some(collection_id) = certificate_collection {
+                T::CertificateNfts::mint_into(
+                    &collection_id,
+                    &task_id,
+                    &assignee,
+                    &T::CertificateItemConfig::default(),
+                    true,
+                )?;
+            }
 
             Tasks::<T>::try_mutate(task_id, |maybe_task| -> DispatchResult {
                 let task = maybe_task.as_mut().ok_or(Error::<T>::TaskNotFound)?;
