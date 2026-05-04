@@ -1,270 +1,411 @@
-<div align="center">
+# Substrate 企业任务平台
 
-# Polkadot SDK's Parachain Template
+这是一个基于 Polkadot SDK / FRAME 的企业任务平台示例项目。项目从官方 parachain template 演进而来，重点展示如何在 runtime 中组合官方 pallet 和自定义 pallet，完成一个可运行的链上业务流程。
 
-<img height="70px" alt="Polkadot SDK Logo" src="https://github.com/paritytech/polkadot-sdk/raw/master/docs/images/Polkadot_Logo_Horizontal_Pink_White.png#gh-dark-mode-only"/>
-<img height="70px" alt="Polkadot SDK Logo" src="https://github.com/paritytech/polkadot-sdk/raw/master/docs/images/Polkadot_Logo_Horizontal_Pink_Black.png#gh-light-mode-only"/>
+当前最终形态支持：
 
-> This is a template for creating a [parachain](https://wiki.polkadot.network/docs/learn-parachains) based on Polkadot SDK.
->
-> This template is automatically updated after releases in the main [Polkadot SDK monorepo](https://github.com/paritytech/polkadot-sdk).
+- 企业创建任务，设置奖励、截止区块和是否发 NFT 证书。
+- 用户完成 identity 认证后领取任务。
+- 用户提交任务后，由 committee 审核。
+- 审核通过后自动发放积分资产。
+- 任务到期后由 scheduler 自动关闭。
+- 审核通过时可按任务配置自动 mint NFT 证书。
+- 管理员可通过 committee 动态设置证书 NFT collection。
 
-</div>
+项目定位是学习和实战演示，不是生产环境代码。生产化还需要补充权限细分、metadata、storage migration、benchmark 完整权重、前端和部署安全策略。
 
-## Table of Contents
+---
 
-- [Intro](#intro)
+## 技术栈
 
-- [Template Structure](#template-structure)
+| 模块 | 作用 |
+| --- | --- |
+| Polkadot SDK / Substrate | 区块链底层框架 |
+| FRAME | Runtime pallet 开发框架 |
+| `pallet-tasks` | 自定义企业任务业务 pallet |
+| `pallet-assets` | 积分资产 |
+| `pallet-identity` | 用户身份认证 |
+| `pallet-membership` | 委员会成员管理 |
+| `pallet-collective` | 委员会提案、投票、执行 |
+| `pallet-scheduler` | 截止区块自动关闭任务 |
+| `pallet-nfts` | 链上证书 NFT |
+| Polkadot.js Apps | 本地链交互和手动测试 |
 
-- [Getting Started](#getting-started)
+---
 
-- [Starting a Development Chain](#starting-a-development-chain)
+## 项目结构
 
-  - [Omni Node](#omni-node-prerequisites)
-  - [Zombienet setup with Omni Node](#zombienet-setup-with-omni-node)
-  - [Parachain Template Node](#parachain-template-node)
-  - [Connect with the Polkadot-JS Apps Front-End](#connect-with-the-polkadot-js-apps-front-end)
-  - [Takeaways](#takeaways)
+```text
+parachain-template/
+├── docs/
+│   ├── Substrate 企业任务平台.md
+│   └── Substrate框架介绍与示例.md
+├── pallets/
+│   ├── counter/
+│   ├── task-rewards/
+│   ├── tasks/
+│   └── template/
+├── runtime/
+├── node/
+├── Cargo.toml
+├── chain_spec.json
+└── README.md
+```
 
-- [Runtime development](#runtime-development)
-- [Contributing](#contributing)
-- [Getting Help](#getting-help)
+重点文件：
 
-## Intro
+```text
+pallets/tasks/src/lib.rs        企业任务 pallet 核心逻辑
+pallets/tasks/src/mock.rs       tasks pallet 测试 runtime
+pallets/tasks/src/tests.rs      tasks pallet 单元测试
+pallets/tasks/src/weights.rs    tasks pallet 权重
+runtime/src/configs/mod.rs      runtime pallet 配置
+runtime/src/lib.rs              runtime 入口与版本配置
+docs/                           学习和操作文档
+```
 
-- ⏫ This template provides a starting point to build a [parachain](https://wiki.polkadot.network/docs/learn-parachains).
+---
 
-- ☁️ It is based on the
-  [Cumulus](https://paritytech.github.io/polkadot-sdk/master/polkadot_sdk_docs/polkadot_sdk/cumulus/index.html) framework.
+## 阶段分支
 
-- 🔧 Its runtime is configured with a single custom pallet as a starting point, and a handful of ready-made pallets
-  such as a [Balances pallet](https://paritytech.github.io/polkadot-sdk/master/pallet_balances/index.html).
+项目按阶段保留了分支，方便回看每一步的演进。
 
-- 👉 Learn more about parachains [here](https://wiki.polkadot.network/docs/learn-parachains)
+| 分支 | 内容 |
+| --- | --- |
+| `counter-v1-demo` | Counter pallet 入门示例 |
+| `task-rewards` | Task Rewards v1 示例 |
+| `task-rewards-v2-migration` | Task Rewards storage migration 示例 |
+| `phase-1-assets-tasks` | Phase 1：assets + tasks |
+| `phase-2-identity` | Phase 2：identity |
+| `phase-3-committee-approval` | Phase 3：membership + collective |
+| `phase-4-scheduler-deadlines` | Phase 4：scheduler deadline 自动关闭 |
+| `phase-5-nft-certificates` | Phase 5：NFT 证书基础和自动 mint |
+| `phase-6-dynamic-nft-config` | 当前最终版：动态 certificate collection + 任务级开关 |
 
-## Template Structure
+常用查看方式：
 
-A Polkadot SDK based project such as this one consists of:
+```bash
+git branch
+git checkout phase-6-dynamic-nft-config
+git log --oneline --decorate -10
+```
 
-- 🧮 the [Runtime](./runtime/README.md) - the core logic of the parachain.
-- 🎨 the [Pallets](./pallets/README.md) - from which the runtime is constructed.
-- 💿 a [Node](./node/README.md) - the binary application, not part of the project default-members list and not compiled unless
-  building the project with `--workspace` flag, which builds all workspace members, and is an alternative to
-  [Omni Node](https://paritytech.github.io/polkadot-sdk/master/polkadot_sdk_docs/reference_docs/omni_node/index.html).
+---
 
-## Getting Started
+## Tags
 
-- 🦀 The template is using the Rust language.
+部分阶段也保留了 tag，用于固定阶段快照：
 
-- 👉 Check the
-  [Rust installation instructions](https://www.rust-lang.org/tools/install) for your system.
+```text
+counter-v1
+counter-v2
+task-rewards-v1
+task-rewards-v2
+tag-phase-1-assets-tasks
+tag-phase-2-identity
+tag-phase-3-committee-approval
+phase-4-scheduler
+phase-5-nfts-basic
+phase-5-auto-nft-certificates
+```
 
-- 🛠️ Depending on your operating system and Rust version, there might be additional
-  packages required to compile this template - please take note of the Rust compiler output.
+查看 tag：
 
-Fetch parachain template code:
+```bash
+git tag -l -n
+```
 
-```sh
-git clone https://github.com/paritytech/polkadot-sdk-parachain-template.git parachain-template
+切到某个阶段快照：
 
+```bash
+git checkout tag-phase-1-assets-tasks
+```
+
+---
+
+## 环境要求
+
+建议在 WSL2 / Ubuntu 中运行。
+
+```text
+Ubuntu / WSL2
+Rust 1.88.x
+Polkadot.js Apps
+```
+
+安装基础依赖：
+
+```bash
+sudo apt update
+sudo apt install --assume-yes \
+  git clang curl libssl-dev llvm libclang-dev \
+  libudev-dev make protobuf-compiler
+```
+
+安装 Rust：
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source ~/.cargo/env
+rustup toolchain install 1.88.0
+rustup default 1.88.0
+rustup target add wasm32-unknown-unknown --toolchain 1.88.0
+rustup component add rust-src --toolchain 1.88.0
+```
+
+---
+
+## 快速开始
+
+克隆项目：
+
+```bash
+git clone https://github.com/chenshuangwtt/parachain-template.git
 cd parachain-template
 ```
 
-## Starting a Development Chain
+切到最终阶段分支：
 
-The parachain template relies on a hardcoded parachain id which is defined in the runtime code
-and referenced throughout the contents of this file as `{{PARACHAIN_ID}}`. Please replace
-any command or file referencing this placeholder with the value of the `PARACHAIN_ID` constant:
-
-```rust,ignore
-pub const PARACHAIN_ID: u32 = 1000;
+```bash
+git checkout phase-6-dynamic-nft-config
 ```
 
-### Omni Node Prerequisites
+运行核心测试：
 
-[Omni Node](https://paritytech.github.io/polkadot-sdk/master/polkadot_sdk_docs/reference_docs/omni_node/index.html) can
-be used to run the parachain template's runtime. `polkadot-omni-node` binary crate usage is described at a high-level
-[on crates.io](https://crates.io/crates/polkadot-omni-node).
-
-#### Install `polkadot-omni-node`
-
-```sh
-cargo install polkadot-omni-node
+```bash
+cargo test -p pallet-tasks
 ```
 
-> For more advanced options, please see the installation section at [`crates.io/omni-node`](https://crates.io/crates/polkadot-omni-node).
+检查 runtime：
 
-#### Build `parachain-template-runtime`
+```bash
+cargo check -p parachain-template-runtime
+```
 
-```sh
+完整编译：
+
+```bash
+cargo build --release --locked
+```
+
+如果 Windows 下 `wasm-opt-sys` 或 wasm 相关依赖编译卡住，优先切到 WSL 中执行。
+
+---
+
+## 本地链运行
+
+安装运行工具：
+
+```bash
+cargo install --locked staging-chain-spec-builder
+cargo install --locked polkadot-omni-node
+```
+
+编译 runtime：
+
+```bash
 cargo build --profile production
 ```
 
-#### Install `staging-chain-spec-builder`
-
-```sh
-cargo install staging-chain-spec-builder
-```
-
-> For more advanced options, please see the installation section at [`crates.io/staging-chain-spec-builder`](https://crates.io/crates/staging-chain-spec-builder).
-
-#### Use `chain-spec-builder` to generate the `chain_spec.json` file
-
-```sh
-chain-spec-builder create --relay-chain "rococo-local" --runtime \
-    target/release/wbuild/parachain-template-runtime/parachain_template_runtime.wasm named-preset development
-```
-
-**Note**: the `relay-chain` flag is required by Omni Node. The `relay-chain` value is set in accordance
-with the relay chain ID where this instantiation of parachain-template will connect to.
-
-#### Run Omni Node
-
-Start Omni Node with the generated chain spec. We'll start it in development mode (without a relay chain config), producing
-and finalizing blocks based on manual seal, configured below to seal a block with each second.
+生成 chain spec：
 
 ```bash
-polkadot-omni-node --chain <path/to/chain_spec.json> --dev --dev-block-time 1000
+chain-spec-builder create --relay-chain "rococo-local" --runtime \
+  target/release/wbuild/parachain-template-runtime/parachain_template_runtime.wasm \
+  named-preset development > chain_spec.json
 ```
 
-However, such a setup is not close to what would run in production, and for that we need to setup a local
-relay chain network that will help with the block finalization. In this guide we'll setup a local relay chain
-as well. We'll not do it manually, by starting one node at a time, but we'll use [zombienet](https://paritytech.github.io/zombienet/intro.html).
+启动 dev chain：
 
-Follow through the next section for more details on how to do it.
-
-### Zombienet setup with Omni Node
-
-Assuming we continue from the last step of the previous section, we have a chain spec and we need to setup a relay chain.
-We can install `zombienet` as described [here](https://paritytech.github.io/zombienet/install.html#installation), and
-`zombienet-omni-node.toml` contains the network specification we want to start.
-
-#### Relay chain prerequisites
-
-Download the `polkadot` (and the accompanying `polkadot-prepare-worker` and `polkadot-execute-worker`) binaries from
-[Polkadot SDK releases](https://github.com/paritytech/polkadot-sdk/releases). Then expose them on `PATH` like so:
-
-```sh
-export PATH="$PATH:<path/to/binaries>"
+```bash
+polkadot-omni-node --chain ./chain_spec.json --dev --dev-block-time 1000
 ```
 
-#### Update `zombienet-omni-node.toml` with a valid chain spec path
+连接 Polkadot.js Apps：
 
-To simplify the process of using the parachain-template with zombienet and Omni Node, we've added a pre-configured
-development chain spec (dev_chain_spec.json) to the parachain template. The zombienet-omni-node.toml file of this
-template points to it, but you can update it to an updated chain spec generated on your machine. To generate a
-chain spec refer to [staging-chain-spec-builder](https://crates.io/crates/staging-chain-spec-builder)
-
-Then make the changes in the network specification like so:
-
-```toml
-# ...
-[[parachains]]
-id = "<PARACHAIN_ID>"
-chain_spec_path = "<TO BE UPDATED WITH A VALID PATH>"
-# ...
+```text
+https://polkadot.js.org/apps/#/explorer?rpc=ws://127.0.0.1:9944
 ```
 
-#### Start the network
+如果你使用的是 parachain 端口或模板生成的其他端口，以本地节点日志中的 WebSocket 地址为准。
 
-```sh
-zombienet --provider native spawn zombienet-omni-node.toml
+---
+
+## Polkadot.js Apps 操作入口
+
+详细页面操作见：
+
+```text
+docs/Substrate 企业任务平台.md
 ```
 
-### Parachain Template Node
+核心账号约定：
 
-As mentioned in the `Template Structure` section, the `node` crate is optionally compiled and it is an alternative
-to `Omni Node`. Similarly, it requires setting up a relay chain, and we'll use `zombienet` once more.
+| 账号 | 用途 |
+| --- | --- |
+| Alice | sudo 签名账户，assets / nfts owner，也可作为 committee member |
+| Bob | 任务领取者、提交者、积分和证书获得者 |
+| Charlie / Dave | committee member，用于投票 |
 
-#### Install the `parachain-template-node`
+核心 origin：
 
-```sh
-cargo install --path node --locked
+| Origin | 调用方式 | 用途 |
+| --- | --- | --- |
+| Signed | 普通账户直接签名 | `createTask`、`claimTask`、`submitTask` |
+| Root via sudo | `sudo.sudo(...)` | `assets.forceCreate`、`nfts.forceCreate`、`membership.setMembers` |
+| Collective | `committee.propose/vote/close` | `approveTask`、`rejectTask`、`setCertificateCollectionId` |
+
+初始化示例：
+
+```text
+sudo.sudo(assets.forceCreate(1, Alice, true, 1))
+sudo.sudo(nfts.forceCreate(owner=Alice, config=default))
+sudo.sudo(membership.setMembers([Alice, Charlie, Dave], prime=Alice, oldCount=0))
 ```
 
-#### Setup and start the network
+开启证书任务流程：
 
-For setup, please consider the instructions for `zombienet` installation [here](https://paritytech.github.io/zombienet/install.html#installation)
-and [relay chain prerequisites](#relay-chain-prerequisites).
+```text
+Alice Signed:
+tasks.createTask(reward=100, deadline=未来区块, certificateEnabled=true)
 
-We're left just with starting the network:
+Bob Signed:
+tasks.claimTask(taskId)
+tasks.submitTask(taskId)
 
-```sh
-zombienet --provider native spawn zombienet.toml
+Committee Collective:
+committee.propose/vote/close 执行 tasks.approveTask(taskId)
+
+查询:
+assets.account(1, Bob)
+nfts.item(collectionId, taskId).owner
 ```
 
-### Connect with the Polkadot-JS Apps Front-End
+关闭证书任务流程：
 
-- 🌐 You can interact with your local node using the
-  hosted version of the Polkadot/Substrate Portal:
-  [relay chain](https://polkadot.js.org/apps/#/explorer?rpc=ws://localhost:9944)
-  and [parachain](https://polkadot.js.org/apps/#/explorer?rpc=ws://localhost:9988).
+```text
+Alice Signed:
+tasks.createTask(reward=100, deadline=未来区块, certificateEnabled=false)
 
-- 🪐 A hosted version is also
-  available on [IPFS](https://dotapps.io/).
+Bob Signed:
+tasks.claimTask(taskId)
+tasks.submitTask(taskId)
 
-- 🧑‍🔧 You can also find the source code and instructions for hosting your own instance in the
-  [`polkadot-js/apps`](https://github.com/polkadot-js/apps) repository.
+Committee Collective:
+committee.propose/vote/close 执行 tasks.approveTask(taskId)
 
-### Takeaways
-
-Development parachains:
-
-- 🔗 Connect to relay chains, and we showcased how to connect to a local one.
-- 🧹 Do not persist the state.
-- 💰 Are preconfigured with a genesis state that includes several prefunded development accounts.
-- 🧑‍⚖️ Development accounts are used as validators, collators, and `sudo` accounts.
-
-## Runtime development
-
-We recommend using [`chopsticks`](https://github.com/AcalaNetwork/chopsticks) when the focus is more on the runtime
-development and `OmniNode` is enough as is.
-
-### Install chopsticks
-
-To use `chopsticks`, please install the latest version according to the installation [guide](https://github.com/AcalaNetwork/chopsticks?tab=readme-ov-file#install).
-
-### Build a raw chain spec
-
-Build the `parachain-template-runtime` as mentioned before in this guide and use `chain-spec-builder`
-again but this time by passing `--raw-storage` flag:
-
-```sh
-chain-spec-builder create --raw-storage --relay-chain "rococo-local" --runtime \
-    target/release/wbuild/parachain-template-runtime/parachain_template_runtime.wasm named-preset development
+查询:
+assets.account(1, Bob) 增加
+nfts.item(collectionId, taskId) 不存在
 ```
 
-### Start `chopsticks` with the chain spec
+注意：当前 `AdminOrigin = committee 2/3`，所以不能用：
 
-```sh
-npx @acala-network/chopsticks@latest --chain-spec <path/to/chain_spec.json>
+```text
+sudo.sudo(tasks.setCertificateCollectionId(1))
 ```
 
-### Alternatives
+这个调用会返回 `BadOrigin`。正确方式是通过 `committee.propose/vote/close` 执行：
 
-`OmniNode` can be still used for runtime development if using the `--dev` flag, while `parachain-template-node` doesn't
-support it at this moment. It can still be used to test a runtime in a full setup where it is started alongside a
-relay chain network (see [Parachain Template node](#parachain-template-node) setup).
+```text
+tasks.setCertificateCollectionId(1)
+```
 
-## Contributing
+---
 
-- 🔄 This template is automatically updated after releases in the main [Polkadot SDK monorepo](https://github.com/paritytech/polkadot-sdk).
+## 文档
 
-- ➡️ Any pull requests should be directed to this [source](https://github.com/paritytech/polkadot-sdk/tree/master/templates/parachain).
+建议阅读：
 
-- 😇 Please refer to the monorepo's
-  [contribution guidelines](https://github.com/paritytech/polkadot-sdk/blob/master/docs/contributor/CONTRIBUTING.md) and
-  [Code of Conduct](https://github.com/paritytech/polkadot-sdk/blob/master/docs/contributor/CODE_OF_CONDUCT.md).
+| 文档 | 内容 |
+| --- | --- |
+| `docs/Substrate框架介绍与示例.md` | Substrate / FRAME 基础、Counter 示例、Task Rewards、benchmark、migration |
+| `docs/Substrate 企业任务平台.md` | 企业任务平台阶段实现、关键代码、账号 origin、Polkadot.js Apps 操作流程、常见错误 |
 
-## Getting Help
+---
 
-- 🧑‍🏫 To learn about Polkadot in general, [docs.Polkadot.com](https://docs.polkadot.com/) website is a good starting point.
+## 常见命令
 
-- 🧑‍🔧 For technical introduction, [here](https://github.com/paritytech/polkadot-sdk#-documentation) are
-  the Polkadot SDK documentation resources.
+```bash
+# 查看当前分支
+git branch
 
-- 👥 Additionally, there are [GitHub issues](https://github.com/paritytech/polkadot-sdk/issues) and
-  [Substrate StackExchange](https://substrate.stackexchange.com/).
-- 👥You can also reach out on the [Official Polkadot discord server](https://polkadot-discord.w3f.tools/)
-- 🧑Reach out on [Telegram](https://t.me/substratedevs) for more questions and discussions
+# 查看阶段 tag
+git tag -l -n
+
+# 运行 tasks pallet 测试
+cargo test -p pallet-tasks
+
+# 检查 runtime
+cargo check -p parachain-template-runtime
+
+# 格式化
+cargo fmt
+
+# 查看最近提交
+git log --oneline --decorate -10
+```
+
+---
+
+## 常见问题
+
+### `BadOrigin`
+
+先确认调用需要哪种 origin：
+
+- `sudo.sudo(...)` 产生 Root。
+- 普通账户签名是 Signed。
+- `committee.propose/vote/close` 才会产生 Collective。
+
+当前 `approveTask` 和 `setCertificateCollectionId` 默认需要 Collective。
+
+### `UnknownCollection`
+
+启用 NFT 证书的任务在 approve 时会 mint 到任务创建时快照的 collection。如果 collection 没有提前创建，会失败并回滚积分和任务状态。
+
+### `AlreadyExists`
+
+证书 NFT 的 itemId 使用 taskId。相同 collection 下同一个 taskId 只能 mint 一次。
+
+### `Vec not found`
+
+`no_std` pallet 中需要显式引入：
+
+```rust
+use alloc::vec::Vec;
+```
+
+### `PalletFeatures::all_enabled()` 不能放 const
+
+`all_enabled()` 不是 const fn，需要用 `Get` 包装或按当前 runtime 配置方式处理。
+
+---
+
+## 当前状态
+
+当前最终分支：
+
+```text
+phase-6-dynamic-nft-config
+```
+
+当前最终能力：
+
+```text
+createTask(reward, deadline, certificateEnabled)
+claimTask
+submitTask
+approveTask
+rejectTask
+closeTask
+setCertificateCollectionId
+```
+
+后续可提升方向：
+
+- NFT metadata：任务标题、完成时间、审核人、证书 URI。
+- `setCertificateCollectionId` 时预校验 collection 是否存在。
+- `AdminOrigin` 支持 Root + committee 组合权限。
+- 为已有链数据补 storage version 和 migration。
+- 接入 multisig / proxy 做生产权限管理。
