@@ -29,6 +29,8 @@
 | `pallet-collective` | 委员会提案、投票、执行 |
 | `pallet-scheduler` | 截止区块自动关闭任务 |
 | `pallet-nfts` | 链上证书 NFT |
+| React + Vite + Tailwind CSS | 企业任务平台前端 |
+| `@polkadot/api` | 前端连接本地链和读取 runtime metadata |
 | Polkadot.js Apps | 本地链交互和手动测试 |
 
 ---
@@ -40,6 +42,10 @@ parachain-template/
 ├── docs/
 │   ├── Substrate 企业任务平台.md
 │   └── Substrate框架介绍与示例.md
+├── frontend/
+│   ├── src/
+│   ├── package.json
+│   └── README.md
 ├── pallets/
 │   ├── counter/
 │   ├── task-rewards/
@@ -61,6 +67,8 @@ pallets/tasks/src/tests.rs      tasks pallet 单元测试
 pallets/tasks/src/weights.rs    tasks pallet 权重
 runtime/src/configs/mod.rs      runtime pallet 配置
 runtime/src/lib.rs              runtime 入口与版本配置
+frontend/src/lib/chain.ts       前端链调用封装
+frontend/src/pages/Setup.tsx    前端初始化、identity judgement 页面
 docs/                           学习和操作文档
 ```
 
@@ -231,6 +239,66 @@ https://polkadot.js.org/apps/#/explorer?rpc=ws://127.0.0.1:9944
 
 ---
 
+## 前端应用
+
+仓库包含一个 React + Vite + TypeScript 前端，目录：
+
+```text
+frontend/
+```
+
+前端功能：
+
+- 默认连接 `ws://127.0.0.1:9944`，页面可切换 RPC。
+- 支持 `Dev Accounts` 和 `Polkadot.js Extension` 两种签名模式。
+- Dev Accounts 内置本地演示账户：Alice、Bob、Charlie、Dave、Eve、Ferdie。
+- 提供初始化页面：创建 assets、创建 NFT collection、设置 committee members、设置 identity、添加 registrar、提供 judgement。
+- 提供任务页面：创建任务、领取任务、提交任务、查看任务状态和原始 storage。
+- 提供委员会页面：生成 proposal、vote、close，并查询 `reviewCommittee.voting(proposalHash)` 投票进度。
+- 提供证书页面：查询 Bob 积分和 NFT certificate owner。
+
+启动前端：
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+访问：
+
+```text
+http://localhost:5173
+```
+
+默认 Vite 绑定：
+
+```text
+0.0.0.0:5173
+```
+
+前端本地演示推荐流程：
+
+```text
+1. 顶部选择 Dev Accounts -> Alice。
+2. Setup 页面点击“自动填入 Dev Alice/Bob/Charlie/Dave 地址”。
+3. Alice 执行 sudo.sudo assets.forceCreate(1)。
+4. Alice 执行 sudo.sudo nfts.forceCreate(0)。
+5. Alice 执行 sudo.sudo reviewMembership.resetMembers。
+6. Alice 执行 sudo.sudo reviewMembership.setPrime。
+7. 切换 Dev Accounts -> Bob，执行 identity.setIdentity。
+8. 切回 Alice，执行 sudo.sudo identity.addRegistrar。
+9. 点击“计算 Bob identity hash”。
+10. Alice 执行 identity.provideJudgement。
+11. Alice 创建任务，Bob claim + submit。
+12. Alice/Charlie/Dave 在 Committee 页面 propose/vote/close approveTask。
+13. Certificates 页面查询积分和 NFT 证书。
+```
+
+注意：Dev Accounts 模式只适合本地 dev chain，不用于生产环境。
+
+---
+
 ## Polkadot.js Apps 操作入口
 
 详细页面操作见：
@@ -252,7 +320,7 @@ docs/Substrate 企业任务平台.md
 | Origin | 调用方式 | 用途 |
 | --- | --- | --- |
 | Signed | 普通账户直接签名 | `createTask`、`claimTask`、`submitTask` |
-| Root via sudo | `sudo.sudo(...)` | `assets.forceCreate`、`nfts.forceCreate`、`membership.setMembers` |
+| Root via sudo | `sudo.sudo(...)` | `assets.forceCreate`、`nfts.forceCreate`、`reviewMembership.resetMembers`、`reviewMembership.setPrime` |
 | Collective | `committee.propose/vote/close` | `approveTask`、`rejectTask`、`setCertificateCollectionId` |
 
 初始化示例：
@@ -260,7 +328,8 @@ docs/Substrate 企业任务平台.md
 ```text
 sudo.sudo(assets.forceCreate(1, Alice, true, 1))
 sudo.sudo(nfts.forceCreate(owner=Alice, config=default))
-sudo.sudo(membership.setMembers([Alice, Charlie, Dave], prime=Alice, oldCount=0))
+sudo.sudo(reviewMembership.resetMembers([Alice, Charlie, Dave]))
+sudo.sudo(reviewMembership.setPrime(Alice))
 ```
 
 开启证书任务流程：
