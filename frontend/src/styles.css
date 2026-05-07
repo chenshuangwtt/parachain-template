@@ -1,0 +1,384 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    @apply bg-slate-100 text-ink antialiased;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+  }
+
+  * {
+    @apply box-border;
+  }
+
+  body {
+    @apply m-0 min-h-screen min-w-80 font-sans;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  button {
+    @apply inline-flex min-h-9 cursor-pointer items-center justify-center gap-2 rounded-md border border-brand bg-brand px-3 font-medium text-white shadow-sm transition-colors duration-200 hover:bg-[#185a62] focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2;
+  }
+
+  button:disabled {
+    @apply cursor-not-allowed opacity-55 hover:bg-brand;
+  }
+
+  input,
+  select,
+  textarea {
+    @apply min-h-9 w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-ink shadow-sm transition-colors duration-200 placeholder:text-slate-400 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20;
+  }
+
+  textarea {
+    @apply min-h-20 resize-y;
+  }
+}
+
+@layer components {
+  .app-shell {
+    @apply grid min-h-screen grid-cols-[248px_minmax(0,1fr)] max-[1120px]:grid-cols-1;
+  }
+
+  .sidebar {
+    @apply flex flex-col gap-5 bg-sidebar px-4 py-5 text-white shadow-xl shadow-slate-900/20 max-[1120px]:sticky max-[1120px]:top-0 max-[1120px]:z-20 max-[1120px]:p-3;
+  }
+
+  .brand {
+    @apply flex items-center gap-3;
+  }
+
+  .brand-mark {
+    @apply grid h-10 w-10 place-items-center rounded-lg bg-accent font-extrabold text-sidebar shadow-sm;
+  }
+
+  .brand h1 {
+    @apply m-0 text-lg font-semibold;
+  }
+
+  .brand p {
+    @apply mt-1 text-xs text-slate-300;
+  }
+
+  nav {
+    @apply grid gap-1.5 max-[1120px]:flex max-[1120px]:overflow-x-auto;
+  }
+
+  .nav-button {
+    @apply w-full justify-start border-transparent bg-transparent text-slate-200 shadow-none transition-colors duration-200 hover:bg-[#274b5d] hover:text-white focus:ring-white/40 max-[1120px]:w-auto max-[1120px]:whitespace-nowrap;
+  }
+
+  .nav-button.active {
+    @apply bg-[#274b5d] text-white;
+  }
+
+  .main {
+    @apply min-w-0 bg-[radial-gradient(circle_at_top_left,_rgba(31,111,120,0.10),_transparent_340px),linear-gradient(180deg,_#f8fafc_0%,_#eef3f6_100%)] p-4;
+  }
+
+  .topbar {
+    @apply mb-4 grid grid-cols-[minmax(280px,1fr)_minmax(420px,520px)_auto] items-end gap-3 rounded-xl border border-line bg-white/85 p-3 shadow-sm backdrop-blur max-[1120px]:grid-cols-1;
+  }
+
+  .chain-meta {
+    @apply flex min-h-9 items-center gap-2.5 whitespace-nowrap rounded-md border border-line bg-slate-50 px-3 text-sm;
+  }
+
+  .dot {
+    @apply h-2.5 w-2.5 rounded-full bg-red-600;
+  }
+
+  .dot.online {
+    @apply bg-emerald-600;
+  }
+
+  .field {
+    @apply grid gap-1.5;
+  }
+
+  .field label {
+    @apply text-xs text-muted;
+  }
+
+  .field.compact {
+    @apply min-w-64;
+  }
+
+  .account-box {
+    @apply grid grid-cols-2 gap-2 max-[1120px]:grid-cols-1;
+  }
+
+  .inline-control {
+    @apply flex gap-2;
+  }
+
+  .inline-control input,
+  .inline-control select {
+    @apply min-w-0;
+  }
+
+  .icon-button {
+    @apply w-9 px-0;
+  }
+
+  .ghost-button {
+    @apply border-slate-300 bg-white text-slate-700 hover:bg-slate-50;
+  }
+
+  .alert {
+    @apply mb-3 rounded-md px-3 py-2.5;
+  }
+
+  .alert.error {
+    @apply bg-red-100 text-red-900;
+  }
+
+  .page {
+    @apply grid gap-4;
+  }
+
+  .page-heading {
+    @apply rounded-xl border border-line bg-white/90 p-5 shadow-sm backdrop-blur;
+  }
+
+  .page-heading h2 {
+    @apply mb-1.5 mt-0 text-2xl font-semibold tracking-tight;
+  }
+
+  .page-heading p {
+    @apply m-0 text-muted;
+  }
+
+  .metric-grid {
+    @apply grid grid-cols-4 gap-3 max-[1120px]:grid-cols-1;
+  }
+
+  .metric {
+    @apply grid min-h-28 gap-2 rounded-xl border border-line bg-white p-4 shadow-sm transition-colors duration-200 hover:border-brand/40;
+  }
+
+  .metric span {
+    @apply text-muted;
+  }
+
+  .metric strong {
+    @apply break-words text-xl font-semibold;
+  }
+
+  .metric.wide {
+    @apply col-span-2 max-[1120px]:col-span-1;
+  }
+
+  .workflow {
+    @apply grid grid-cols-4 gap-3 max-[1120px]:grid-cols-1;
+  }
+
+  .workflow button {
+    @apply min-h-14 justify-between border-line bg-white px-4 text-ink hover:border-brand/50 hover:bg-slate-50;
+  }
+
+  .panel {
+    @apply grid gap-3.5 rounded-xl border border-line bg-white p-4 shadow-sm;
+  }
+
+  .panel h3 {
+    @apply m-0 text-lg font-semibold;
+  }
+
+  .panel-header {
+    @apply flex items-center justify-between gap-3 border-b border-slate-100 pb-3;
+  }
+
+  .split-grid {
+    @apply grid grid-cols-2 gap-4 max-[1120px]:grid-cols-1;
+  }
+
+  .form-grid {
+    @apply grid grid-cols-3 items-end gap-3 max-[1120px]:grid-cols-1;
+  }
+
+  .toggle {
+    @apply flex min-h-9 items-center gap-2 text-slate-700;
+  }
+
+  .toggle input {
+    @apply min-h-0 w-auto;
+  }
+
+  .status-list {
+    @apply flex flex-wrap gap-2;
+  }
+
+  .badge {
+    @apply inline-flex min-h-7 items-center rounded-full px-2.5 text-sm font-medium;
+  }
+
+  .badge.ok {
+    @apply bg-emerald-100 text-emerald-900;
+  }
+
+  .badge.warn {
+    @apply bg-amber-100 text-amber-900;
+  }
+
+  .data-box,
+  .code-block {
+    @apply m-0 max-w-full overflow-auto rounded-md bg-ink p-3 text-slate-200;
+  }
+
+  .hint {
+    @apply m-0 text-muted;
+  }
+
+  .instruction-list {
+    @apply grid content-start gap-2;
+  }
+
+  .instruction-list p {
+    @apply m-0 rounded-md bg-slate-50 px-3 py-2 text-slate-700;
+  }
+
+  .table {
+    @apply grid overflow-auto rounded-lg border border-slate-200 bg-white;
+  }
+
+  .table-head,
+  .table-row {
+    @apply grid min-w-[920px] items-center border-b border-slate-200;
+  }
+
+  .table-head {
+    @apply min-h-10 bg-slate-100/80 font-bold text-muted;
+  }
+
+  .table-row {
+    @apply min-h-12 transition-colors duration-150 hover:bg-slate-50 last:border-b-0;
+  }
+
+  .table-head > span,
+  .table-row > span {
+    @apply min-w-0 overflow-hidden text-ellipsis whitespace-nowrap px-2.5 py-2;
+  }
+
+  .task-table {
+    grid-template-columns: 60px 110px 100px 120px 120px 160px 250px;
+  }
+
+  .status-pill {
+    @apply inline-flex min-h-7 items-center rounded-full px-2.5 text-sm font-semibold;
+  }
+
+  .status-open {
+    @apply bg-blue-100 text-blue-900;
+  }
+
+  .status-claimed {
+    @apply bg-amber-100 text-amber-900;
+  }
+
+  .status-submitted {
+    @apply bg-violet-100 text-violet-900;
+  }
+
+  .status-approved {
+    @apply bg-emerald-100 text-emerald-900;
+  }
+
+  .status-rejected,
+  .status-closed {
+    @apply bg-slate-200 text-slate-800;
+  }
+
+  .task-details {
+    @apply col-span-full border-t border-slate-100 px-2.5 py-2;
+  }
+
+  .task-details summary {
+    @apply cursor-pointer text-sm text-brand;
+  }
+
+  .task-details pre {
+    @apply mt-2 max-h-64 overflow-auto rounded-md bg-slate-950 p-3 text-xs text-slate-100;
+  }
+
+  .row-actions,
+  .button-row {
+    @apply flex items-center gap-2;
+  }
+
+  .hash-box {
+    @apply grid gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5;
+  }
+
+  .hash-box span {
+    @apply text-xs text-muted;
+  }
+
+  .hash-box strong {
+    @apply break-words;
+  }
+
+  .warning-panel {
+    @apply border-amber-300 bg-amber-50 shadow-none;
+  }
+
+  .voting-grid {
+    @apply grid grid-cols-6 gap-3 max-[1120px]:grid-cols-2;
+  }
+
+  .voting-grid div {
+    @apply grid gap-1 rounded-md border border-slate-200 bg-slate-50 p-3;
+  }
+
+  .voting-grid span {
+    @apply text-xs text-muted;
+  }
+
+  .voting-grid strong {
+    @apply break-words text-lg;
+  }
+
+  .tx-panel {
+    @apply mb-4 grid gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 shadow-sm;
+  }
+
+  .tx-panel.failed {
+    @apply border-red-200 bg-red-50;
+  }
+
+  .tx-heading {
+    @apply flex justify-between gap-3;
+  }
+
+  .tx-title {
+    @apply flex items-center gap-2 font-bold;
+  }
+
+  .tx-panel p {
+    @apply m-0 break-words;
+  }
+
+  .error-text {
+    @apply text-red-800;
+  }
+
+  .event-list {
+    @apply grid gap-1.5;
+  }
+
+  .event-row {
+    @apply grid gap-1 rounded-md bg-white/70 p-2;
+  }
+
+  .event-row span {
+    @apply break-words text-xs text-muted;
+  }
+}
